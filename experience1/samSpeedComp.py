@@ -84,6 +84,11 @@ def argsManager():
     parser.add_argument("tmpfsWorkdirPath",
                             help="",
                             type="str")
+
+    parser.add_argument("samplesDirPath",
+                            help="",
+                            type="str")
+
     parser.add_argument("outputCsvFilePath"
                             help="",
                             type="str")
@@ -91,9 +96,13 @@ def argsManager():
                             help="",
                             type="str")
 
+    parser.add_argument("outputDirPath",
+                            hepl="",
+                            type="str")
+
     return parser.parse_args()
 
-def evaluate(hddWorkdirPath, tmpfsWorkdirPath):
+def evaluate():
     """Main program which aimed, for each sample of big brain, at splitting it and then re-merging it.
     We split and merge each sample of big brain on both EXT and TPMFS file systems.
 
@@ -102,22 +111,21 @@ def evaluate(hddWorkdirPath, tmpfsWorkdirPath):
         tmpfsWorkdirPath: Work directory for the TMPFS file system.
     """
 
-    samplesDir = "bigBrainGenSamples"
-
-    csvFile = open(csvFilePath, "w")
+    legendFileName="legend.txt"
+    csvFile = open(args.outputCsvFilePath, "w")
+    csvFile.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time"])
 
     #for each input file (sample of big brain)
-    for fileName in os.listdir(hddWorkdirPath + "/" + samplesDir):
-        if not fileName.endswith("nii"):# or fileName.endswith("bigBrainSample0.nii"):
+    for fileName in os.listdir(args.hddWorkdirPath + "/" + args.samplesDirPath):
+        if not fileName.endswith("nii"):
             continue
 
-        filePathTmpfs = os.path.join(tmpfsWorkdirPath, samplesDir, fileName)
-        filePathHdd = os.path.join(hddWorkdirPath, samplesDir, fileName)
+        filePathTmpfs = os.path.join(args.tmpfsWorkdirPath, args.samplesDirPath, fileName)
+        filePathHdd = os.path.join(args.hddWorkdirPath, args.samplesDirPath, fileName)
 
-        outputDirPath = "splittedSamples"
-        mergeFileName = fileName + "Merged.nii"
-        legendFileName = "legend.txt"
         splitName =  os.path.splitext(fileName)[0] + "Split"
+        mergeFileName = fileName + "Merged.nii"
+
         slabWidth=128
 
         #temporary copy the file to split and merge on tmpfs device
@@ -195,8 +203,7 @@ def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
     print("Processing time to merge " + outputFilePath + " using " + str(strategy) +  ": " + str(t) + " seconds." )
 
 if __name__ == "__main__":
-    hddWorkdirPath="/data/tguedon/samActivities"
-    tmpfsWorkdirPath="/dev/shm/tguedon"
 
-    evaluate(hddWorkdirPath, tmpfsWorkdirPath)
+    args=argsManager()
+    evaluate(args)
 
