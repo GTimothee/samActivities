@@ -6,6 +6,7 @@ import math
 from time import time
 from enum import Enum
 from shutil import copyfile
+import csv
 
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
@@ -141,6 +142,29 @@ def buildDataSamples():
                                         sampleMaxSize=3.0)
     print("Done. Slab width : " + str(slabWidth))
 
+def argsManager():
+    """ Parser to manage command line arguments.
+
+    Return:
+        args: List of parsed arguments and associated values.
+    """
+    parser = argparse.ArgumentParse(description="Benchmarking program to evaluate split/merge efficiency.")
+
+    parser.add_argument("hddWorkdirPath",
+                            help="",
+                            type="str")
+    parser.add_argument("tmpfsWorkdirPath",
+                            help="",
+                            type="str")
+    parser.add_argument("outputCsvFilePath"
+                            help="",
+                            type="str")
+    parser.add_argument("configFilePath",
+                            help="",
+                            type="str")
+
+    return parser.parse_args()
+
 def evaluate(hddWorkdirPath, tmpfsWorkdirPath):
     """Main program which aimed, for each sample of big brain, at splitting it and then re-merging it.
     We split and merge each sample of big brain on both EXT and TPMFS file systems.
@@ -151,6 +175,8 @@ def evaluate(hddWorkdirPath, tmpfsWorkdirPath):
     """
 
     samplesDir = "bigBrainGenSamples"
+
+    csvFile = open(csvFilePath, "w")
 
     #for each input file (sample of big brain)
     for fileName in os.listdir(hddWorkdirPath + "/" + samplesDir):
@@ -241,7 +267,7 @@ def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
     print("Processing time to merge " + outputFilePath + " using " + str(strategy) +  ": " + str(t) + " seconds." )
 
 if __name__ == "__main__":
-    hddWorkdirPath="/data/tguedon/mission1"
+    hddWorkdirPath="/data/tguedon/samActivities"
     tmpfsWorkdirPath="/dev/shm/tguedon"
 
     #buildDataSamples()

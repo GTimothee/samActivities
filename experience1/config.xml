@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<split>
+    <naive>
+        <first_dim>770</first_dim>
+        <second_dim>605</second_dim>
+        <third_dim>128</third_dim>
+    </naive>
+    <multiple>
+        <Y_splits>10</Y_splits>
+        <Z_splits>5</Z_splits>
+        <X_splits>2</X_splits>
+    </multiple>
+    <clustered>
+        <Y_splits>10</Y_splits>
+        <Z_splits>5</Z_splits>
+        <X_splits>2</X_splits>
+    </clustered>
+</split>
+<merge>
+    <first_dim>3850</first_dim>
+    <second_dim>3025</second_dim>
+    <third_dim>128</third_dim>
+    <mem>
+        <naive>0</naive>
+        <multiple>10*1024**3</multiple>
+        <clustered>10*1024**3</clustered>
+    </mem>
+</merge>
