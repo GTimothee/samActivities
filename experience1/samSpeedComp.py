@@ -7,6 +7,7 @@ from time import time
 from enum import Enum
 from shutil import copyfile
 import csv
+import json
 
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
@@ -15,11 +16,10 @@ class Strategy(Enum):
     MULTIPLE = 2
     CLUSTERED = 3
 
-traductor = {
+translator = {
         'NAIVE':'clustered',
         'CLUSTERED':'clustered',
-        'MULTIPLE':'multiple'
-        }
+        'MULTIPLE':'multiple'}
 
 def argsManager():
     """ Parser to manage command line arguments.
@@ -28,29 +28,12 @@ def argsManager():
         args: List of parsed arguments and associated values.
     """
     parser = argparse.ArgumentParse(description="Benchmarking program to evaluate split/merge efficiency.")
-
-    parser.add_argument("hddWorkdirPath",
-                            help="",
-                            type="str")
-    parser.add_argument("tmpfsWorkdirPath",
-                            help="",
-                            type="str")
-
-    parser.add_argument("samplesDirPath",
-                            help="",
-                            type="str")
-
-    parser.add_argument("outputCsvFilePath"
-                            help="",
-                            type="str")
-    parser.add_argument("configFilePath",
-                            help="",
-                            type="str")
-
-    parser.add_argument("outputDirPath",
-                            hepl="",
-                            type="str")
-
+    parser.add_argument("hddWorkdirPath", help="", type="str")
+    parser.add_argument("tmpfsWorkdirPath", help="", type="str")
+    parser.add_argument("samplesDirPath", help="", type="str")
+    parser.add_argument("outputCsvFilePath", help="", type="str")
+    parser.add_argument("configFilePath", help="", type="str")
+    parser.add_argument("outputDirPath", help="", type="str")
     return parser.parse_args()
 
 def evaluate(args):
@@ -59,7 +42,9 @@ def evaluate(args):
 
     """
 
-    slabWidth=128
+    with open(args.configFilePath) as jsonFile:
+        config = json.load(jsonFile)
+
     with open(args.outputCsvFilePath, "w") as csvFile:
         csvFile.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time"])
 
@@ -81,14 +66,14 @@ def evaluate(args):
                 times = applySplitAndMerge(splitDir=os.path.join(args.tmpfsWorkdirPath, args.outputDirPath),
                                     fileToSplitPath=filePathTmpfs,
                                     strategy=strategy,
-                                    slabWidth=slabWidth,
+                                    config=config,
                                     mergeFileName=mergeFileName)
                 csvFile.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1]])
 
                 times = applySplitAndMerge(splitDir=os.path.join(args.hddWorkdirPath, args.outputDirPath),
                                     fileToSplitPath=filePathHdd,
                                     strategy=strategy,
-                                    slabWidth=slabWidth,
+                                    config=config,
                                     mergeFileName=mergeFileName)
 
                 csvFile.writerow([fileToSplitName, "hdd", "ext4", strategy, times[0], times[1]])
@@ -105,7 +90,7 @@ def evaluate(args):
 
         csvFile.close()
 
-def applySplitAndMerge(splitDir, fileToSplitPath, strategy, slabWidth, mergeFileName):
+def applySplitAndMerge(splitDir, fileToSplitPath, strategy, config, mergeFileName):
     """ Split an input file and then merge it back.
 
     Args:
@@ -116,19 +101,22 @@ def applySplitAndMerge(splitDir, fileToSplitPath, strategy, slabWidth, mergeFile
         mergeFileName: File name of the output merged file.
     """
 
-    splitTime = applySplit(filePath=fileToSplitPath,
+    splitTime = applySplit(config,
+                        filePath=fileToSplitPath,
                         outputDir=splitDir,
-                        outputFileName=traductor[strategy.name], #splitName
+                        outputFileName=translator[strategy.name], #splitName
                         slabWidth=slabWidth,
                         strategy=strategy.name)
 
-    mergeTime = applyMerge(outputFilePath=os.path.join(splitDir, mergeFileName),
+    mergeTime = applyMerge(config,
+                        outputFilePath=os.path.join(splitDir, mergeFileName),
                         legendFilePath=os.path.join(splitDir, "legend.txt"),
                         strategy= strategy.name,
                         nbSlices=slabWidth)
+
     return [splitTime, mergeTime]
 
-def applySplit(filePath, outputDir, outputFileName, slabWidth, strategy):
+def applySplit(config, filePath, outputDir, outputFileName, slabWidth, strategy):
     """ Split a nii input file using sam/imageutils.
 
     Args:
@@ -151,23 +139,27 @@ def applySplit(filePath, outputDir, outputFileName, slabWidth, strategy):
     #algorithm selector
     applySplit={
             Strategy.NAIVE: lambda img, slabWidth, outputDir, outputFileName : img.split(
-                first_dim=770,
-                second_dim=605,
-                third_dim=slabWidth,
+                first_dim=config['split'][Strategy.name.lower()]["first_dim"],
+                second_dim=config['split'][Strategy.name.lower()]["second_dim"],
+                third_dim=config['split'][Strategy.name.lower()]["third_dim"],
                 local_dir=outputDir,
                 filename_prefix=outputFileName),
 
             Strategy.MULTIPLE: lambda img, slabWidth, outputDir, outputFileName:img.split_multiple_writes(
-                Y_splits=10, Z_splits=5, X_splits=2,
+                Y_splits=config['split'][Strategy.name.lower()]["Y_splits"],
+                Z_splits=config['split'][Strategy.name.lower()]["Z_splits"],
+                X_splits=config['split'][Strategy.name.lower()]["X_splits"],
                 out_dir=outputDir,
-                mem=12*1024**3,
+                mem=config['split']['mem'],
                 filename_prefix=outputFileName,
                 extension="nii"),
 
             Strategy.CLUSTERED:lambda img, slabWidth, outputDir, outputFileName:img.split_clustered_writes(
-                Y_splits=10, Z_splits=5, X_splits=2,
+                Y_splits=config['split'][Strategy.name.lower()]["Y_splits"],
+                Z_splits=config['split'][Strategy.name.lower()]["Z_splits"],
+                X_splits=config['split'][Strategy.name.lower()]["X_splits"],
                 out_dir=outputDir,
-                mem=12*1024**3,
+                mem=config['split']['mem'],
                 filename_prefix=outputFileName,
                 extension="nii")
     }
@@ -178,7 +170,7 @@ def applySplit(filePath, outputDir, outputFileName, slabWidth, strategy):
     print("Processing time to split " + filePath + " using " + str(strategy) + ": " + str(t) + " seconds.")
     return t
 
-def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
+def applyMerge(config, outputFilePath, legendFilePath, strategy, nbSlices):
     """ Merge splits that have previously been created from a nii image in order to rebuild the input nii image.
     The splits have been saved into an output folder with a 'legend' text file containing the indexes of the splits to be merged.
 
@@ -191,16 +183,15 @@ def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
 
     #open a new image object
     img=iu.ImageUtils(outputFilePath,
-                        first_dim=3850,
-                        second_dim=3025,
-                        third_dim=nbSlices,
-                        dtype=np.uint16)
+                        first_dim = config['merge']["first_dim"],
+                        second_dim = config['merge']["second_dim"],
+                        third_dim = config['merge']["third_dim"],
+                        dtype = np.uint16)
 
-    mem=12*1024**3
     applyMerge = {
-            Strategy.NAIVE: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "clustered", 0),
-            Strategy.CLUSTERED: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "clustered", mem),
-            Strategy.MULTIPLE: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "multiple", mem)
+            Strategy.NAIVE: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "clustered", config['merge']["mem"][Strategy.name.lower()]),
+            Strategy.CLUSTERED: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "clustered", config['merge']["mem"][Strategy.name.lower()]),
+            Strategy.MULTIPLE: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "multiple", config['merge']["mem"][Strategy.name.lower()])
     }
 
     #apply the merge
@@ -211,6 +202,5 @@ def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
     return t
 
 if __name__ == "__main__":
-
     args=argsManager()
     evaluate(args)
