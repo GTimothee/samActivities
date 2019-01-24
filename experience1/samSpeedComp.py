@@ -31,10 +31,11 @@ def argsManager():
     parser = argparse.ArgumentParser(description="Benchmarking program to evaluate split/merge efficiency.")
     parser.add_argument("hddWorkDirPath", help="", type=str)
     parser.add_argument("tmpfsWorkDirPath", help="", type=str)
-    parser.add_argument("samplesDirPath", help="", type=str)
+    parser.add_argument("BigBrainSamplDirPath", help="", type=str)
     parser.add_argument("outputCsvFilePath", help="", type=str)
     parser.add_argument("configFilePath", help="", type=str)
-    parser.add_argument("outputDirPath", help="", type=str)
+    parser.add_argument("splitsDirPathTmpfs", help="", type=str)
+    parser.add_argument("splitsDirPathHdd", help="", type=str)
     return parser.parse_args()
 
 def evaluate(args):
@@ -52,13 +53,13 @@ def evaluate(args):
         writer.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time", "config_file"])
 
         #for each input file (sample of big brain)
-        for fileToSplitName in os.listdir(args.hddWorkDirPath + "/" + args.samplesDirPath):
+        for fileToSplitName in os.listdir(args.BigBrainSamplDirPath):
             if not fileToSplitName.endswith("nii"):
                 continue
 
             #we will split and merge a given input file
-            filePathTmpfs = os.path.join(args.tmpfsWorkDirPath, args.samplesDirPath, fileToSplitName)
-            filePathHdd = os.path.join(args.hddWorkDirPath, args.samplesDirPath, fileToSplitName)
+            filePathTmpfs = os.path.join(args.splitsDirPathTmpfs, fileToSplitName)
+            filePathHdd = os.path.join(args.splitsDirPathHdd, fileToSplitName)
             splitName =  os.path.splitext(fileToSplitName)[0] + "Split"
             mergeFileName = fileToSplitName + "MergedBack.nii"
             copyfile(filePathHdd, filePathTmpfs) #temporary copy the file to split and merge on tmpfs device
@@ -66,14 +67,14 @@ def evaluate(args):
             #for each algorithm, do split and merge (all on the same input file)
             for strategy in list(Strategy):
 
-                times = applySplitAndMerge(splitDir=os.path.join(args.tmpfsWorkDirPath, args.outputDirPath),
+                times = applySplitAndMerge(splitDir=args.splitsDirPathTmpfs,
                                     fileToSplitPath=filePathTmpfs,
                                     strategy=strategy,
                                     config=config,
                                     mergeFileName=mergeFileName)
                 writer.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1], args.configFilePath])
 
-                times = applySplitAndMerge(splitDir=os.path.join(args.hddWorkDirPath, args.outputDirPath),
+                times = applySplitAndMerge(splitDir=args.splitsDirPathHdd,
                                     fileToSplitPath=filePathHdd,
                                     strategy=strategy,
                                     config=config,
@@ -82,10 +83,10 @@ def evaluate(args):
                 writer.writerow([fileToSplitName, "hdd", "ext4", strategy, times[0], times[1], args.configFilePath])
 
                 #Empty the directories
-                for filename in os.listdir(os.path.join(args.tmpfsWorkDirPath, args.outputDirPath)): #empty output dir on tmpfs
-                    os.remove(os.path.join(args.tmpfsWorkdirPath, args.outputDirPath, filename))
-                for filename in os.listdir(os.path.join(args.hddWorkDirPath, args.outputDirPath)):
-                    os.remove(os.path.join(args.hddWorkdirPath, args.outputDirPath, filename))
+                for filename in os.listdir(args.splitsDirPathTmpfs): #empty output dir on tmpfs
+                    os.remove(os.path.join(args.splitsDirPathTmpfs, filename))
+                for filename in os.listdir(args.splitsDirPathHdd)):
+                    os.remove(os.path.join(args.splitsDirPathHdd, filename))
 
                 print("\n")
 
@@ -166,7 +167,7 @@ def applySplit(config, filePath, outputDir, outputFileName, strategy):
     }
 
     t=time()
-    applySplit[Strategy[strategy]](img,config, outputDir, outputFileName, strategy) #run the appropriate split algorithm
+    applySplit[Strategy[strategy]](img, config, outputDir, outputFileName, strategy) #run the appropriate split algorithm
     t=time()-t
     print("Processing time to split " + filePath + " using " + str(strategy) + ": " + str(t) + " seconds.")
     return t
