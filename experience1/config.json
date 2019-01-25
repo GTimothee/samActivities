@@ -1,0 +1,31 @@
+{
+  "split":{
+    "naive":{
+      "first_dim":"770",
+      "second_dim":"605",
+      "third_dim":"128"
+    },
+    "multiple":{
+      "X_splits":"2",
+      "Y_splits":"10",
+      "Z_splits":"5"
+    },
+    "clustered":{
+      "X_splits":"2",
+      "Y_splits":"10",
+      "Z_splits":"5"
+    },
+    "mem":"12884901888"
+  },
+
+  "merge":{
+    "first_dim":"3850",
+    "second_dim":"3025",
+    "third_dim":"128",
+    "mem":{
+      "naive":"0",
+      "multiple":"12884901888",
+      "clustered":"12884901888"
+    }
+  }
+}

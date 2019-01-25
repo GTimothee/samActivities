@@ -7,79 +7,117 @@ from time import time
 from enum import Enum
 from shutil import copyfile
 import csv
+import json
+import argparse
 
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
 class Strategy(Enum):
-    NAIVE = 1
-    MULTIPLE = 2
-    CLUSTERED = 3
+    MULTIPLE=2
+    CLUSTERED=1
+    NAIVE = 3
 
-traductor = {
+translator = {
         'NAIVE':'clustered',
         'CLUSTERED':'clustered',
-        'MULTIPLE':'multiple'
-        }
+        'MULTIPLE':'multiple'}
 
-def extractBigBrainSamples(bigBrainPath, outputDir, nbSamples, sampleMaxSize):
-    """ Extract file samples from the big brain nii.gz file using nibabel.
-    Several samples will allow to do several times the same tests but using different data.
+def argsManager():
+    """ Parser to manage command line arguments.
 
-    Args:
-        bigBrainPath: Path to the big brain file (nii.gz extension).
-        outputDir: Path to output directory in which to store the samples.
-        nbSamples: Number of samples to extract from the image.
-        sampleMaxSize: Maximum size of a slab in terms of memory (in Gigabytes)
+    Return:
+        args: List of parsed arguments and associated values.
+    """
+    parser = argparse.ArgumentParser(description="Benchmarking program to evaluate split/merge efficiency.")
+    parser.add_argument("bigBrainSamplDirPathTmpfs", help="", type=str)
+    parser.add_argument("bigBrainSamplDirPathHdd", help="", type=str)
+    parser.add_argument("outputCsvFilePath", help="", type=str)
+    parser.add_argument("configFilePath", help="", type=str)
+    parser.add_argument("splitsDirPathTmpfs", help="", type=str)
+    parser.add_argument("splitsDirPathHdd", help="", type=str)
+    return parser.parse_args()
+
+def evaluate(args):
+    """Main program which aimed, for each sample of big brain, at splitting it and then re-merging it.
+    We split and merge each sample of big brain on both EXT and TPMFS file systems.
+
     """
 
-    if not os.path.isfile(bigBrainPath):
-        print(bigBrainPath + " not found.")
-        return
+    print(args.configFilePath)
+    with open(args.configFilePath) as jsonFile:
+        config = json.load(jsonFile)
 
-    if not os.path.isdir(outputDir):
-        print(outputDir + " not found.")
-        return
+    with open(args.outputCsvFilePath, "w+") as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time", "config_file"])
 
-    #get a proxy to the big brain file
-    proxy = nib.load(bigBrainPath) #proxy image from nibabel
+        #for each input file (sample of big brain)
+        for fileToSplitName in os.listdir(args.bigBrainSamplDirPathHdd):
+            if not fileToSplitName.endswith("nii"):
+                continue
 
-    #get info about the image
-    sliceWidth = proxy.shape[0]
-    sliceDepth = proxy.shape[1]
-    sliceByteSize = proxy.dataobj[...,0].nbytes /1000000000.0  #size of a slice in GB
+            #we will split and merge a given input file
+            filePathTmpfs = os.path.join(args.bigBrainSamplDirPathTmpfs, fileToSplitName)
+            filePathHdd = os.path.join(args.bigBrainSamplDirPathHdd, fileToSplitName)
+            splitName =  os.path.splitext(fileToSplitName)[0] + "Split"
+            mergeFileName = fileToSplitName + "MergedBack.nii"
+            copyfile(filePathHdd, filePathTmpfs) #temporary copy the file to split and merge on tmpfs device
 
-    print("One slice shape:" + str(proxy.shape))
-    print("Slice width : " + str(sliceWidth))
-    print("Slice depth : " + str(sliceDepth))
-    print("Size of a slice in Bytes :" + str(sliceByteSize))
+            #for each algorithm, do split and merge (all on the same input file)
+            for strategy in list(Strategy):
 
-    nbSlicePerSample = int(math.floor(float(sampleMaxSize)/sliceByteSize))
+                times = applySplitAndMerge(splitDir=args.splitsDirPathTmpfs,
+                                    fileToSplitPath=filePathTmpfs,
+                                    strategy=strategy,
+                                    config=config,
+                                    mergeFileName=mergeFileName)
+                writer.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1], args.configFilePath])
 
-    startIndex = 0
-    endIndex = nbSlicePerSample
-    sampleIndex =0
-    while endIndex <= nbSlicePerSample * nbSamples:
+                times = applySplitAndMerge(splitDir=args.splitsDirPathHdd,
+                                    fileToSplitPath=filePathHdd,
+                                    strategy=strategy,
+                                    config=config,
+                                    mergeFileName=mergeFileName)
 
-        #extract a slab, create new img and save
-        dataSlabSample = proxy.dataobj[...,startIndex:endIndex]
-        array_img = nib.Nifti1Image(dataSlabSample, proxy.affine) #create new nifti img
-        nib.save(array_img, os.path.join(outputDir,'bigBrainSample' + str(sampleIndex) + '.nii'))
-        print("Processed slab number " + str(sampleIndex))
+                writer.writerow([fileToSplitName, "hdd", "ext4", strategy, times[0], times[1], args.configFilePath])
 
-        #print info to the user
-        print(startIndex)
-        print(endIndex)
-        print(nbSlicePerSample*nbSamples)
+                #Empty the directories
+                for filename in os.listdir(args.splitsDirPathTmpfs): #empty output dir on tmpfs
+                    os.remove(os.path.join(args.splitsDirPathTmpfs, filename))
+                for filename in os.listdir(args.splitsDirPathHdd):
+                    os.remove(os.path.join(args.splitsDirPathHdd, filename))
 
-        #continue
-        startIndex=endIndex
-        endIndex+=nbSlicePerSample
-        sampleIndex+=1
+                print("\n")
 
-    print("Number slices per sample :" + str(nbSlicePerSample))
-    return nbSlicePerSample
+            os.remove(filePathTmpfs) #delete temporary input file to split and merge from tpmfs device
 
-def applySplit(filePath, outputDir, outputFileName, slabWidth, strategy):
+        csvFile.close()
+
+def applySplitAndMerge(splitDir, fileToSplitPath, strategy, config, mergeFileName):
+    """ Split an input file and then merge it back.
+
+    Args:
+        splitDir: Path to the directory in which to store the splits.
+        fileToSplitPath: Path to the file to be splitted.
+        strategy: Strategy to use for the split process.
+        slabWidth: To be replaced by config data.
+        mergeFileName: File name of the output merged file.
+    """
+
+    splitTime = applySplit(config,
+                        filePath=fileToSplitPath,
+                        outputDir=splitDir,
+                        outputFileName=translator[strategy.name], #splitName
+                        strategy=strategy.name)
+
+    mergeTime = applyMerge(config,
+                        outputFilePath=os.path.join(splitDir, mergeFileName),
+                        legendFilePath=os.path.join(splitDir, "legend.txt"),
+                        strategy= strategy.name)
+
+    return [splitTime, mergeTime]
+
+def applySplit(config, filePath, outputDir, outputFileName, strategy):
     """ Split a nii input file using sam/imageutils.
 
     Args:
@@ -101,141 +139,39 @@ def applySplit(filePath, outputDir, outputFileName, slabWidth, strategy):
 
     #algorithm selector
     applySplit={
-            Strategy.NAIVE: lambda img, slabWidth, outputDir, outputFileName : img.split(
-                first_dim=770,
-                second_dim=605,
-                third_dim=slabWidth,
+            Strategy.NAIVE: lambda img, config, outputDir, outputFileName, strategy : img.split(
+                first_dim=int(config['split'][strategy.lower()]["first_dim"]),
+                second_dim=int(config['split'][strategy.lower()]["second_dim"]),
+                third_dim=int(config['split'][strategy.lower()]["third_dim"]),
                 local_dir=outputDir,
                 filename_prefix=outputFileName),
 
-            Strategy.MULTIPLE: lambda img, slabWidth, outputDir, outputFileName:img.split_multiple_writes(
-                Y_splits=10, Z_splits=5, X_splits=2,
+            Strategy.MULTIPLE: lambda img, config, outputDir, outputFileName, strategy:img.split_multiple_writes(
+                Y_splits=int(config['split'][strategy.lower()]["Y_splits"]),
+                Z_splits=int(config['split'][strategy.lower()]["Z_splits"]),
+                X_splits=int(config['split'][strategy.lower()]["X_splits"]),
                 out_dir=outputDir,
-                mem=12*1024**3,
+                mem=int(config['split']['mem']),
                 filename_prefix=outputFileName,
                 extension="nii"),
 
-            Strategy.CLUSTERED:lambda img, slabWidth, outputDir, outputFileName:img.split_clustered_writes(
-                Y_splits=10, Z_splits=5, X_splits=2,
+            Strategy.CLUSTERED:lambda img, config, outputDir, outputFileName, strategy:img.split_clustered_writes(
+                Y_splits=int(config['split'][strategy.lower()]["Y_splits"]),
+                Z_splits=int(config['split'][strategy.lower()]["Z_splits"]),
+                X_splits=int(config['split'][strategy.lower()]["X_splits"]),
                 out_dir=outputDir,
-                mem=12*1024**3,
+                mem=int(config['split']['mem']),
                 filename_prefix=outputFileName,
                 extension="nii")
     }
 
     t=time()
-    applySplit[Strategy[strategy]](img, slabWidth, outputDir, outputFileName) #run the appropriate split algorithm
+    applySplit[Strategy[strategy]](img, config, outputDir, outputFileName, strategy) #run the appropriate split algorithm
     t=time()-t
     print("Processing time to split " + filePath + " using " + str(strategy) + ": " + str(t) + " seconds.")
+    return t
 
-def buildDataSamples():
-    """ Split the big brain into slabs
-    """
-    print("Splitting Big Brain...")
-
-    bigBrainPath = os.path.join("/data", "bigbrain_40microns.nii.gz")
-    outputDir = "bigBrainGenSamples" #generated samples
-
-    slabWidth = extractBigBrainSamples(bigBrainPath=bigBrainPath,
-                                        outputDir=outputDir,
-                                        nbSamples=5,
-                                        sampleMaxSize=3.0)
-    print("Done. Slab width : " + str(slabWidth))
-
-def argsManager():
-    """ Parser to manage command line arguments.
-
-    Return:
-        args: List of parsed arguments and associated values.
-    """
-    parser = argparse.ArgumentParse(description="Benchmarking program to evaluate split/merge efficiency.")
-
-    parser.add_argument("hddWorkdirPath",
-                            help="",
-                            type="str")
-    parser.add_argument("tmpfsWorkdirPath",
-                            help="",
-                            type="str")
-    parser.add_argument("outputCsvFilePath"
-                            help="",
-                            type="str")
-    parser.add_argument("configFilePath",
-                            help="",
-                            type="str")
-
-    return parser.parse_args()
-
-def evaluate(hddWorkdirPath, tmpfsWorkdirPath):
-    """Main program which aimed, for each sample of big brain, at splitting it and then re-merging it.
-    We split and merge each sample of big brain on both EXT and TPMFS file systems.
-
-    Args:
-        hddWorkdirPath:Work directory for the EXT file system.
-        tmpfsWorkdirPath: Work directory for the TMPFS file system.
-    """
-
-    samplesDir = "bigBrainGenSamples"
-
-    csvFile = open(csvFilePath, "w")
-
-    #for each input file (sample of big brain)
-    for fileName in os.listdir(hddWorkdirPath + "/" + samplesDir):
-        if not fileName.endswith("nii"):# or fileName.endswith("bigBrainSample0.nii"):
-            continue
-
-        filePathTmpfs = os.path.join(tmpfsWorkdirPath, samplesDir, fileName)
-        filePathHdd = os.path.join(hddWorkdirPath, samplesDir, fileName)
-
-        outputDirPath = "splittedSamples"
-        mergeFileName = fileName + "Merged.nii"
-        legendFileName = "legend.txt"
-        splitName =  os.path.splitext(fileName)[0] + "Split"
-        slabWidth=128
-
-        #temporary copy the file to split and merge on tmpfs device
-        copyfile(filePathHdd, filePathTmpfs)
-
-        #for each algorithm
-        for strategy in list(Strategy):
-
-            #split on TMPFS
-            applySplit(filePath=filePathTmpfs,
-                    outputDir=os.path.join(tmpfsWorkdirPath, outputDirPath),
-                    outputFileName=traductor[strategy.name], #splitName,
-                    slabWidth=slabWidth,
-                    strategy=strategy.name)
-
-            #merge on TMPFS
-            applyMerge(outputFilePath=os.path.join(tmpfsWorkdirPath, outputDirPath, mergeFileName),
-                                legendFilePath=os.path.join(tmpfsWorkdirPath, outputDirPath, legendFileName),
-                                strategy= strategy.name,
-                                nbSlices=slabWidth)
-
-            for filename in os.listdir(os.path.join(tmpfsWorkdirPath, outputDirPath)): #empty output dir on tmpfs
-                os.remove(os.path.join(tmpfsWorkdirPath, outputDirPath, filename))
-
-            #split on EXT
-            applySplit(filePath=filePathHdd,
-                    outputDir = os.path.join(hddWorkdirPath, outputDirPath),
-                    outputFileName=traductor[strategy.name], #splitName,
-                    slabWidth=slabWidth,
-                    strategy=strategy.name)
-
-            #merge on EXT
-            applyMerge(outputFilePath=os.path.join(hddWorkdirPath, outputDirPath, mergeFileName),
-                                legendFilePath=os.path.join(hddWorkdirPath, outputDirPath, legendFileName),
-                                strategy=strategy.name,
-                                nbSlices=slabWidth)
-
-            for filename in os.listdir(os.path.join(hddWorkdirPath, outputDirPath)):
-                os.remove(os.path.join(hddWorkdirPath, outputDirPath, filename))
-
-            print("\n")
-
-        os.remove(filePathTmpfs) #delete temporary input file to split and merge from tpmfs device
-
-
-def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
+def applyMerge(config, outputFilePath, legendFilePath, strategy):
     """ Merge splits that have previously been created from a nii image in order to rebuild the input nii image.
     The splits have been saved into an output folder with a 'legend' text file containing the indexes of the splits to be merged.
 
@@ -248,28 +184,25 @@ def applyMerge(outputFilePath, legendFilePath, strategy, nbSlices):
 
     #open a new image object
     img=iu.ImageUtils(outputFilePath,
-                        first_dim=3850,
-                        second_dim=3025,
-                        third_dim=nbSlices,
-                        dtype=np.uint16)
+                        first_dim = int(config['merge']["first_dim"]),
+                        second_dim = int(config['merge']["second_dim"]),
+                        third_dim = int(config['merge']["third_dim"]),
+                        dtype = np.uint16)
 
-    mem=12*1024**3
     applyMerge = {
-            Strategy.NAIVE: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "clustered", 0),
-            Strategy.CLUSTERED: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "clustered", mem),
-            Strategy.MULTIPLE: lambda legendFilePath, mem : img.reconstruct_img(legendFilePath, "multiple", mem)
+            Strategy.NAIVE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()])),
+            Strategy.CLUSTERED: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()])),
+            Strategy.MULTIPLE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "multiple", int(config['merge']["mem"][strategy.lower()]))
     }
 
     #apply the merge
     t=time()
-    applyMerge[Strategy[strategy]](legendFilePath, mem)
+    applyMerge[Strategy[strategy]](legendFilePath, config, strategy)
     t=time()-t
     print("Processing time to merge " + outputFilePath + " using " + str(strategy) +  ": " + str(t) + " seconds." )
+    return t
 
 if __name__ == "__main__":
-    hddWorkdirPath="/data/tguedon/samActivities"
-    tmpfsWorkdirPath="/dev/shm/tguedon"
-
-    #buildDataSamples()
-    evaluate(hddWorkdirPath, tmpfsWorkdirPath)
-
+    args=argsManager()
+    print(args)
+    evaluate(args)
