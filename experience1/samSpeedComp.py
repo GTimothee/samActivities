@@ -13,9 +13,9 @@ import argparse
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
 class Strategy(Enum):
-    NAIVE = 1
-    MULTIPLE = 2
-    CLUSTERED = 3
+    MULTIPLE=2
+    CLUSTERED=1
+    NAIVE = 3
 
 translator = {
         'NAIVE':'clustered',
@@ -29,9 +29,8 @@ def argsManager():
         args: List of parsed arguments and associated values.
     """
     parser = argparse.ArgumentParser(description="Benchmarking program to evaluate split/merge efficiency.")
-    parser.add_argument("hddWorkDirPath", help="", type=str)
-    parser.add_argument("tmpfsWorkDirPath", help="", type=str)
-    parser.add_argument("BigBrainSamplDirPath", help="", type=str)
+    parser.add_argument("bigBrainSamplDirPathTmpfs", help="", type=str)
+    parser.add_argument("bigBrainSamplDirPathHdd", help="", type=str)
     parser.add_argument("outputCsvFilePath", help="", type=str)
     parser.add_argument("configFilePath", help="", type=str)
     parser.add_argument("splitsDirPathTmpfs", help="", type=str)
@@ -53,13 +52,13 @@ def evaluate(args):
         writer.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time", "config_file"])
 
         #for each input file (sample of big brain)
-        for fileToSplitName in os.listdir(args.BigBrainSamplDirPath):
+        for fileToSplitName in os.listdir(args.bigBrainSamplDirPathHdd):
             if not fileToSplitName.endswith("nii"):
                 continue
 
             #we will split and merge a given input file
-            filePathTmpfs = os.path.join(args.splitsDirPathTmpfs, fileToSplitName)
-            filePathHdd = os.path.join(args.splitsDirPathHdd, fileToSplitName)
+            filePathTmpfs = os.path.join(args.bigBrainSamplDirPathTmpfs, fileToSplitName)
+            filePathHdd = os.path.join(args.bigBrainSamplDirPathHdd, fileToSplitName)
             splitName =  os.path.splitext(fileToSplitName)[0] + "Split"
             mergeFileName = fileToSplitName + "MergedBack.nii"
             copyfile(filePathHdd, filePathTmpfs) #temporary copy the file to split and merge on tmpfs device
@@ -85,7 +84,7 @@ def evaluate(args):
                 #Empty the directories
                 for filename in os.listdir(args.splitsDirPathTmpfs): #empty output dir on tmpfs
                     os.remove(os.path.join(args.splitsDirPathTmpfs, filename))
-                for filename in os.listdir(args.splitsDirPathHdd)):
+                for filename in os.listdir(args.splitsDirPathHdd):
                     os.remove(os.path.join(args.splitsDirPathHdd, filename))
 
                 print("\n")
@@ -148,20 +147,20 @@ def applySplit(config, filePath, outputDir, outputFileName, strategy):
                 filename_prefix=outputFileName),
 
             Strategy.MULTIPLE: lambda img, config, outputDir, outputFileName, strategy:img.split_multiple_writes(
-                Y_splits=int(config['split'][strategy.name.lower()]["Y_splits"]),
-                Z_splits=int(config['split'][strategy.name.lower()]["Z_splits"]),
-                X_splits=int(config['split'][strategy.name.lower()]["X_splits"]),
+                Y_splits=int(config['split'][strategy.lower()]["Y_splits"]),
+                Z_splits=int(config['split'][strategy.lower()]["Z_splits"]),
+                X_splits=int(config['split'][strategy.lower()]["X_splits"]),
                 out_dir=outputDir,
-                mem=config['split']['mem'],
+                mem=int(config['split']['mem']),
                 filename_prefix=outputFileName,
                 extension="nii"),
 
             Strategy.CLUSTERED:lambda img, config, outputDir, outputFileName, strategy:img.split_clustered_writes(
-                Y_splits=int(config['split'][strategy.name.lower()]["Y_splits"]),
-                Z_splits=int(config['split'][strategy.name.lower()]["Z_splits"]),
-                X_splits=int(config['split'][strategy.name.lower()]["X_splits"]),
+                Y_splits=int(config['split'][strategy.lower()]["Y_splits"]),
+                Z_splits=int(config['split'][strategy.lower()]["Z_splits"]),
+                X_splits=int(config['split'][strategy.lower()]["X_splits"]),
                 out_dir=outputDir,
-                mem=config['split']['mem'],
+                mem=int(config['split']['mem']),
                 filename_prefix=outputFileName,
                 extension="nii")
     }
@@ -185,15 +184,15 @@ def applyMerge(config, outputFilePath, legendFilePath, strategy):
 
     #open a new image object
     img=iu.ImageUtils(outputFilePath,
-                        first_dim = config['merge']["first_dim"],
-                        second_dim = config['merge']["second_dim"],
-                        third_dim = config['merge']["third_dim"],
+                        first_dim = int(config['merge']["first_dim"]),
+                        second_dim = int(config['merge']["second_dim"]),
+                        third_dim = int(config['merge']["third_dim"]),
                         dtype = np.uint16)
 
     applyMerge = {
-            Strategy.NAIVE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", config['merge']["mem"][strategy.lower()]),
-            Strategy.CLUSTERED: lambda legendFilePath, mem, config, strategy : img.reconstruct_img(legendFilePath, "clustered", config['merge']["mem"][strategy.lower()]),
-            Strategy.MULTIPLE: lambda legendFilePath, mem, config, strategy : img.reconstruct_img(legendFilePath, "multiple", config['merge']["mem"][strategy.lower()])
+            Strategy.NAIVE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()])),
+            Strategy.CLUSTERED: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()])),
+            Strategy.MULTIPLE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "multiple", int(config['merge']["mem"][strategy.lower()]))
     }
 
     #apply the merge
@@ -205,4 +204,5 @@ def applyMerge(config, outputFilePath, legendFilePath, strategy):
 
 if __name__ == "__main__":
     args=argsManager()
+    print(args)
     evaluate(args)

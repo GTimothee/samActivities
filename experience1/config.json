@@ -7,15 +7,15 @@
     },
     "multiple":{
       "X_splits":"2",
-      "Y_splits":"5",
-      "Z_splits":"10"
+      "Y_splits":"10",
+      "Z_splits":"5"
     },
     "clustered":{
       "X_splits":"2",
-      "Y_splits":"5",
-      "Z_splits":"10"
+      "Y_splits":"10",
+      "Z_splits":"5"
     },
-    "mem":"107374182401073741824010737418240"
+    "mem":"12884901888"
   },
 
   "merge":{
@@ -24,8 +24,8 @@
     "third_dim":"128",
     "mem":{
       "naive":"0",
-      "multiple":"107374182401073741824010737418240",
-      "clustered":"107374182401073741824010737418240"
+      "multiple":"12884901888",
+      "clustered":"12884901888"
     }
   }
 }
