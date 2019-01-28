@@ -221,5 +221,4 @@ def applyMerge(config, outputFilePath, legendFilePath, strategy):
 
 if __name__ == "__main__":
     args=argsManager()
-    print(args)
     evaluate(args)
