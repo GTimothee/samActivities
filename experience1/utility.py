@@ -122,9 +122,9 @@ def argsManager():
     parser = argparse.ArgumentParser(description="Algorithm to split big brain into smallest chunks for experimentations")
     parser.add_argument("bigBrainPath", help="", type=str)
     parser.add_argument("outputDir", help="", type=str)
-    parser.add_argument("ySize", help="", type=str)
-    parser.add_argument("zSize", help="", type=str)
-    parser.add_argument("xSize", help="", type=str)
+    parser.add_argument("ySize", help="", type=int)
+    parser.add_argument("zSize", help="", type=int)
+    parser.add_argument("xSize", help="", type=int)
     return parser.parse_args()
 
 if __name__ == "__main__":
