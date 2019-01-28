@@ -1,0 +1,6 @@
+sample,hardware_type,file_system,strategy,split_time,merge_time
+bigBrainSample0-1-1.nii,hdd,ext4,Strategy.MULTIPLE,132.21877908706665,120.05891394615173
+bigBrainSample0-0-1.nii,ram,tmpfs,Strategy.CLUSTERED,16.057802200317383,21.227675199508667
+bigBrainSample0-0-0.nii,ram,tmpfs,Strategy.CLUSTERED,16.06474494934082,22.18802499771118
+bigBrainSample0-1-0.nii,ram,tmpfs,Strategy.CLUSTERED,16.08884286880493,22.41219687461853
+bigBrainSample0-0-0.nii,hdd,ext4,Strategy.MULTIPLE,120.98615598678589,125.87130808830261

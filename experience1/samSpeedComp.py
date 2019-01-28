@@ -97,8 +97,8 @@ def evaluate(args):
             writer.writerow([run['fileName'], run['hardware'], run['filesystem'], run['strategy'], times[0], times[1]])
 
             #Empty the output split directories
-            for f in os.listdir(run['splitsDir']):
-                os.remove(os.path.join(run['splitsDir'], f))
+            for f in os.listdir(run['splitDir']):
+                os.remove(os.path.join(run['splitDir'], f))
 
         csvFile.close()
 
@@ -116,7 +116,7 @@ def applySplitAndMerge(splitDir, filePathHdd, fileToSplitPath, strategy, config,
     if importFile == True:
         copyfile(filePathHdd, fileToSplitPath) #temporary retrieve the file to split
 
-    os.system('sync; sudo sh -c "/usr/bin/echo 3 > /proc/sys/vm/drop_caches"')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     splitTime = applySplit(config,
                         filePath=fileToSplitPath,
@@ -125,9 +125,9 @@ def applySplitAndMerge(splitDir, filePathHdd, fileToSplitPath, strategy, config,
                         strategy=strategy.name)
 
     if importFile == True:
-        os.remove(fileToSamplePath) #delete input file to save space
+        os.remove(fileToSplitPath) #delete input file to save space
 
-    os.system('sync; sudo sh -c "/usr/bin/echo 3 > /proc/sys/vm/drop_caches"')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     mergeTime = applyMerge(config,
                         outputFilePath=os.path.join(splitDir, mergeFileName),
