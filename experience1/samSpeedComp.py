@@ -61,20 +61,19 @@ def evaluate(args):
             filePathHdd = os.path.join(args.bigBrainSamplDirPathHdd, fileToSplitName)
             splitName =  os.path.splitext(fileToSplitName)[0] + "Split"
             mergeFileName = fileToSplitName + "MergedBack.nii"
-            copyfile(filePathHdd, filePathTmpfs) #temporary copy the file to split and merge on tmpfs device
 
             #for each algorithm, do split and merge (all on the same input file)
             for strategy in list(Strategy):
 
                 times = applySplitAndMerge(splitDir=args.splitsDirPathTmpfs,
-                                    fileToSplitPath=filePathTmpfs,
+                                    fileToSamplePath=filePathTmpfs,
                                     strategy=strategy,
                                     config=config,
                                     mergeFileName=mergeFileName)
                 writer.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1], args.configFilePath])
 
                 times = applySplitAndMerge(splitDir=args.splitsDirPathHdd,
-                                    fileToSplitPath=filePathHdd,
+                                    fileToSamplePath=filePathHdd,
                                     strategy=strategy,
                                     config=config,
                                     mergeFileName=mergeFileName)
@@ -89,11 +88,9 @@ def evaluate(args):
 
                 print("\n")
 
-            os.remove(filePathTmpfs) #delete temporary input file to split and merge from tpmfs device
-
         csvFile.close()
 
-def applySplitAndMerge(splitDir, fileToSplitPath, strategy, config, mergeFileName):
+def applySplitAndMerge(splitDir, fileToSamplePath, strategy, config, mergeFileName):
     """ Split an input file and then merge it back.
 
     Args:
@@ -104,11 +101,15 @@ def applySplitAndMerge(splitDir, fileToSplitPath, strategy, config, mergeFileNam
         mergeFileName: File name of the output merged file.
     """
 
+    copyfile(filePathHdd, fileToSamplePath) #temporary retrieve the file to split
+
     splitTime = applySplit(config,
-                        filePath=fileToSplitPath,
+                        filePath=fileToSamplePath,
                         outputDir=splitDir,
                         outputFileName=translator[strategy.name], #splitName
                         strategy=strategy.name)
+
+    os.remove(fileToSamplePath) #delete input file to save space
 
     mergeTime = applyMerge(config,
                         outputFilePath=os.path.join(splitDir, mergeFileName),
