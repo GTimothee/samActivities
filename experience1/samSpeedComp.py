@@ -9,6 +9,8 @@ from shutil import copyfile
 import csv
 import json
 import argparse
+import subprocess
+import random
 
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
@@ -51,10 +53,20 @@ def evaluate(args):
         writer = csv.writer(csvFile)
         writer.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time", "config_file"])
 
-        #for each input file (sample of big brain)
-        for fileToSplitName in os.listdir(args.bigBrainSamplDirPathHdd):
-            if not fileToSplitName.endswith("nii"):
+        #create the runs to execute
+        runs = list()
+        for fileName in os.listdir(args.bigBrainSamplDirPathHdd):
+            if not fileName.endswith("nii"):
                 continue
+            for strategy in list(strategy):
+                for i in range(5):
+                    runs.append({'fileName':fileName, 'strategy:'strategy})
+        random.shuffle(runs)
+
+        #for each input file (sample of big brain)
+        for run in runs:
+            fileToSplitName = run['fileName']
+            strategy = run['strategy']
 
             #we will split and merge a given input file
             filePathTmpfs = os.path.join(args.bigBrainSamplDirPathTmpfs, fileToSplitName)
@@ -62,31 +74,30 @@ def evaluate(args):
             splitName =  os.path.splitext(fileToSplitName)[0] + "Split"
             mergeFileName = fileToSplitName + "MergedBack.nii"
 
-            #for each algorithm, do split and merge (all on the same input file)
-            for strategy in list(Strategy):
+            #do split and merge
 
-                times = applySplitAndMerge(splitDir=args.splitsDirPathTmpfs,
+            times = applySplitAndMerge(splitDir=args.splitsDirPathTmpfs,
                                     fileToSamplePath=filePathTmpfs,
                                     strategy=strategy,
                                     config=config,
                                     mergeFileName=mergeFileName)
-                writer.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1], args.configFilePath])
+            writer.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1], args.configFilePath])
 
-                times = applySplitAndMerge(splitDir=args.splitsDirPathHdd,
+            times = applySplitAndMerge(splitDir=args.splitsDirPathHdd,
                                     fileToSamplePath=filePathHdd,
                                     strategy=strategy,
                                     config=config,
                                     mergeFileName=mergeFileName)
 
-                writer.writerow([fileToSplitName, "hdd", "ext4", strategy, times[0], times[1], args.configFilePath])
+            writer.writerow([fileToSplitName, "hdd", "ext4", strategy, times[0], times[1], args.configFilePath])
 
                 #Empty the directories
-                for filename in os.listdir(args.splitsDirPathTmpfs): #empty output dir on tmpfs
-                    os.remove(os.path.join(args.splitsDirPathTmpfs, filename))
-                for filename in os.listdir(args.splitsDirPathHdd):
-                    os.remove(os.path.join(args.splitsDirPathHdd, filename))
+            for filename in os.listdir(args.splitsDirPathTmpfs): #empty output dir on tmpfs
+                os.remove(os.path.join(args.splitsDirPathTmpfs, filename))
+            for filename in os.listdir(args.splitsDirPathHdd):
+                os.remove(os.path.join(args.splitsDirPathHdd, filename))
 
-                print("\n")
+            print("\n")
 
         csvFile.close()
 
@@ -102,6 +113,8 @@ def applySplitAndMerge(splitDir, fileToSamplePath, strategy, config, mergeFileNa
     """
 
     copyfile(filePathHdd, fileToSamplePath) #temporary retrieve the file to split
+    ps = subprocess.Popen(['sync;', 'echo', '3', '>', '/proc/sys/vm/drop_caches'],
+                        stdout=subprocess.PIPE)
 
     splitTime = applySplit(config,
                         filePath=fileToSamplePath,
@@ -110,6 +123,9 @@ def applySplitAndMerge(splitDir, fileToSamplePath, strategy, config, mergeFileNa
                         strategy=strategy.name)
 
     os.remove(fileToSamplePath) #delete input file to save space
+
+    ps = subprocess.Popen(['sync;', 'echo', '3', '>', '/proc/sys/vm/drop_caches'],
+                        stdout=subprocess.PIPE)
 
     mergeTime = applyMerge(config,
                         outputFilePath=os.path.join(splitDir, mergeFileName),

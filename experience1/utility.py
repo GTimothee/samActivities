@@ -68,3 +68,11 @@ def buildDataSamples():
                                         nbSamples=5,
                                         sampleMaxSize=3.0)
     print("Done. Slab width: " + str(slabWidth))
+
+
+def argsManager():
+    parser=argparse.ArgumentParser(description"Algorithm to split big brain into smallest chunks for experimentations")
+    parser.add_argument("")
+
+if __name__ == "__main__":
+    buildDataSamples()
