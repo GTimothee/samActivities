@@ -9,6 +9,7 @@ from shutil import copyfile
 import csv
 import json
 import argparse
+import random
 
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
@@ -43,54 +44,75 @@ def evaluate(args):
 
     """
 
-    print(args.configFilePath)
     with open(args.configFilePath) as jsonFile:
         config = json.load(jsonFile)
 
     with open(args.outputCsvFilePath, "w+") as csvFile:
         writer = csv.writer(csvFile)
-        writer.writerow(["sample", "hardware_type", "file_system", "strategy", "split_time", "merge_time", "config_file"])
 
-        #for each input file (sample of big brain)
-        for fileToSplitName in os.listdir(args.bigBrainSamplDirPathHdd):
-            if not fileToSplitName.endswith("nii"):
+        #output csv file's header
+        writer.writerow(["sample", "hardware_type", "file_system", "strategy",
+                            "split_time", "merge_time",
+                            "split_nb_seeks", "merge_nb_seeks",
+                            "split_read_time", "merge_read_time",
+                            "split_write_time", "merge_write_time",
+                            "split_seek_time", "merge_seek_time"])
+
+        #create the runs to execute
+        runs = list()
+        for fileName in os.listdir(args.bigBrainSamplDirPathHdd)[:5]: #testing on 5 samples should be enough, at least for the moment
+            if not fileName.endswith("nii"):
                 continue
 
-            #we will split and merge a given input file
-            filePathTmpfs = os.path.join(args.bigBrainSamplDirPathTmpfs, fileToSplitName)
-            filePathHdd = os.path.join(args.bigBrainSamplDirPathHdd, fileToSplitName)
-            splitName =  os.path.splitext(fileToSplitName)[0] + "Split"
-            mergeFileName = fileToSplitName + "MergedBack.nii"
-
-            #for each algorithm, do split and merge (all on the same input file)
             for strategy in list(Strategy):
+                for i in range(5):
+                    runs.append({'fileName':fileName,
+                                    'strategy':strategy,
+                                    'hardware':'ram',
+                                    'filesystem':'tmpfs',
+                                    'bigBrainSamplDir':args.bigBrainSamplDirPathTmpfs,
+                                    'splitDir':args.splitsDirPathTmpfs})
 
-                times = applySplitAndMerge(splitDir=args.splitsDirPathTmpfs,
-                                    fileToSamplePath=filePathTmpfs,
-                                    strategy=strategy,
+                    runs.append({'fileName':fileName,
+                                    'strategy':strategy,
+                                    'hardware':'hdd',
+                                    'filesystem':'ext4',
+                                    'bigBrainSamplDir':args.bigBrainSamplDirPathHdd,
+                                    'splitDir':args.splitsDirPathHdd})
+
+        random.shuffle(runs)
+
+        #for each input file (sample of big brain)
+        for run in runs:
+
+            importFile = False
+            if run['filesystem'] == 'tmpfs':
+                importFile = True
+
+            #do split and merge
+            splitStatsDict, mergeStatsDict = applySplitAndMerge(splitDir=run['splitDir'],
+                                    filePathHdd = os.path.join(args.bigBrainSamplDirPathHdd, run['fileName']),
+                                    fileToSplitPath=os.path.join(run['bigBrainSamplDir'], run['fileName']),
+                                    strategy=run['strategy'],
                                     config=config,
-                                    mergeFileName=mergeFileName)
-                writer.writerow([fileToSplitName, "", "tmpfs", strategy, times[0], times[1], args.configFilePath])
+                                    mergeFileName=run['fileName'] + "MergedBack.nii",
+                                    importFile=importFile)
 
-                times = applySplitAndMerge(splitDir=args.splitsDirPathHdd,
-                                    fileToSamplePath=filePathHdd,
-                                    strategy=strategy,
-                                    config=config,
-                                    mergeFileName=mergeFileName)
+            #write stats
+            writer.writerow([run['fileName'], run['hardware'], run['filesystem'], run['strategy'],
+                                    splitStatsDict['split_time'], mergeStatsDict['merge_time'],
+                                    splitStatsDict['nb_seeks'], mergeStatsDict['nb_seeks'],
+                                    splitStatsDict['read_time'], mergeStatsDict['read_time'],
+                                    splitStatsDict['write_time'], mergeStatsDict['write_time'],
+                                    splitStatsDict['seek_time'], mergeStatsDict['seek_time']])
 
-                writer.writerow([fileToSplitName, "hdd", "ext4", strategy, times[0], times[1], args.configFilePath])
-
-                #Empty the directories
-                for filename in os.listdir(args.splitsDirPathTmpfs): #empty output dir on tmpfs
-                    os.remove(os.path.join(args.splitsDirPathTmpfs, filename))
-                for filename in os.listdir(args.splitsDirPathHdd):
-                    os.remove(os.path.join(args.splitsDirPathHdd, filename))
-
-                print("\n")
+            #Empty the output split directories
+            for f in os.listdir(run['splitDir']):
+                os.remove(os.path.join(run['splitDir'], f))
 
         csvFile.close()
 
-def applySplitAndMerge(splitDir, fileToSamplePath, strategy, config, mergeFileName):
+def applySplitAndMerge(splitDir, filePathHdd, fileToSplitPath, strategy, config, mergeFileName, importFile):
     """ Split an input file and then merge it back.
 
     Args:
@@ -101,22 +123,29 @@ def applySplitAndMerge(splitDir, fileToSamplePath, strategy, config, mergeFileNa
         mergeFileName: File name of the output merged file.
     """
 
-    copyfile(filePathHdd, fileToSamplePath) #temporary retrieve the file to split
+    if importFile == True:
+        copyfile(filePathHdd, fileToSplitPath) #temporary retrieve the file to split
 
-    splitTime = applySplit(config,
-                        filePath=fileToSamplePath,
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+
+    splitStatsDict = applySplit(config,
+                        filePath=fileToSplitPath,
                         outputDir=splitDir,
                         outputFileName=translator[strategy.name], #splitName
                         strategy=strategy.name)
 
-    os.remove(fileToSamplePath) #delete input file to save space
+    if importFile == True:
+        os.remove(fileToSplitPath) #delete input file to save space
+        importFile = False
 
-    mergeTime = applyMerge(config,
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+
+    mergeStatsDict = applyMerge(config,
                         outputFilePath=os.path.join(splitDir, mergeFileName),
                         legendFilePath=os.path.join(splitDir, "legend.txt"),
                         strategy= strategy.name)
 
-    return [splitTime, mergeTime]
+    return splitStatsDict, mergeStatsDict
 
 def applySplit(config, filePath, outputDir, outputFileName, strategy):
     """ Split a nii input file using sam/imageutils.
@@ -139,24 +168,24 @@ def applySplit(config, filePath, outputDir, outputFileName, strategy):
     img = iu.ImageUtils(filepath=filePath)
 
     #algorithm selector
-    applySplit={
-            Strategy.NAIVE: lambda img, config, outputDir, outputFileName, strategy : img.split(
+    naiveFunc = lambda img, config, outputDir, outputFileName, strategy : img.split(
                 first_dim=int(config['split'][strategy.lower()]["first_dim"]),
                 second_dim=int(config['split'][strategy.lower()]["second_dim"]),
                 third_dim=int(config['split'][strategy.lower()]["third_dim"]),
                 local_dir=outputDir,
-                filename_prefix=outputFileName),
+                filename_prefix=outputFileName)
 
-            Strategy.MULTIPLE: lambda img, config, outputDir, outputFileName, strategy:img.split_multiple_writes(
+    multipleFunc = lambda img, config, outputDir, outputFileName, strategy: img.split_multiple_writes(
                 Y_splits=int(config['split'][strategy.lower()]["Y_splits"]),
                 Z_splits=int(config['split'][strategy.lower()]["Z_splits"]),
                 X_splits=int(config['split'][strategy.lower()]["X_splits"]),
                 out_dir=outputDir,
                 mem=int(config['split']['mem']),
                 filename_prefix=outputFileName,
-                extension="nii"),
+                extension="nii",
+                benchmark=True)
 
-            Strategy.CLUSTERED:lambda img, config, outputDir, outputFileName, strategy:img.split_clustered_writes(
+    clusteredFunc = lambda img, config, outputDir, outputFileName, strategy:img.split_clustered_writes(
                 Y_splits=int(config['split'][strategy.lower()]["Y_splits"]),
                 Z_splits=int(config['split'][strategy.lower()]["Z_splits"]),
                 X_splits=int(config['split'][strategy.lower()]["X_splits"]),
@@ -164,13 +193,19 @@ def applySplit(config, filePath, outputDir, outputFileName, strategy):
                 mem=int(config['split']['mem']),
                 filename_prefix=outputFileName,
                 extension="nii")
+
+    applySplit={
+                Strategy.NAIVE:naiveFunc,
+                Strategy.CLUSTERED:clusteredFunc,
+                Strategy.MULTIPLE:multipleFunc
     }
 
     t=time()
-    applySplit[Strategy[strategy]](img, config, outputDir, outputFileName, strategy) #run the appropriate split algorithm
+    stats_dict = applySplit[Strategy[strategy]](img, config, outputDir, outputFileName, strategy) #run the appropriate split algorithm
     t=time()-t
+    stats_dict['split_time']=t
     print("Processing time to split " + filePath + " using " + str(strategy) + ": " + str(t) + " seconds.")
-    return t
+    return stats_dict
 
 def applyMerge(config, outputFilePath, legendFilePath, strategy):
     """ Merge splits that have previously been created from a nii image in order to rebuild the input nii image.
@@ -190,20 +225,14 @@ def applyMerge(config, outputFilePath, legendFilePath, strategy):
                         third_dim = int(config['merge']["third_dim"]),
                         dtype = np.uint16)
 
-    applyMerge = {
-            Strategy.NAIVE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()])),
-            Strategy.CLUSTERED: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()])),
-            Strategy.MULTIPLE: lambda legendFilePath, config, strategy : img.reconstruct_img(legendFilePath, "multiple", int(config['merge']["mem"][strategy.lower()]))
-    }
-
     #apply the merge
     t=time()
-    applyMerge[Strategy[strategy]](legendFilePath, config, strategy)
+    stats_dict = img.reconstruct_img(legendFilePath, "clustered", int(config['merge']["mem"][strategy.lower()]))
     t=time()-t
+    stats_dict['merge_time']=t
     print("Processing time to merge " + outputFilePath + " using " + str(strategy) +  ": " + str(t) + " seconds." )
-    return t
+    return stats_dict
 
 if __name__ == "__main__":
     args=argsManager()
-    print(args)
     evaluate(args)

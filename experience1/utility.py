@@ -1,13 +1,23 @@
+import nibabel as nib
+import numpy as np
+import imageutils as iu
+import os, sys
+import math
+from time import time
+from enum import Enum
+import argparse
+
+"""
 def extractBigBrainSamples(bigBrainPath, outputDir, nbSamples, sampleMaxSize):
 
-    """ Extract file samples from the big brain nii.gz file using nibabel.
+    '''Extract file samples from the big brain nii.gz file using nibabel.
     Several samples will allow to do several times the same tests but using different data.
     Args:
         bigBrainPath: Path to the big brain file (nii.gz extension).
         outputDir: Path to output directory in which to store the samples.
         nbSamples: Number of samples to extract from the image.
-        sampleMaxSize: Maximum size of a slab in terms of memory (in Gigabytes)
-    """
+        sampleMaxSize: Maximum size of a slab in terms of memory (in Gigabytes)'''
+
 
     if not os.path.isfile(bigBrainPath):
         print(bigBrainPath + " not found.")
@@ -55,16 +65,68 @@ def extractBigBrainSamples(bigBrainPath, outputDir, nbSamples, sampleMaxSize):
 
     print("Number slices per sample: " + str(nbSlicePerSample))
     return nbSlicePerSample
-
+"""
+"""
 def buildDataSamples():
-    """Split the big brain into slabs
 
-    """
+    '''Split the big brain into slabs'''
+
     print("Splitting Big Brain...")
     bigBrainPath = os.path.join("/data", "bigbrain_40microns.nii.gz")
     outputDir = "bigBrainGenSamples" #generated samples
-    slabWidth = extractBigBrainSamples(bigBrainPath=bigBrainPath,
+    slabWidth = extractBigBrainSamples(bigBrainPath=bigBrainFilePath,
                                         outputDir=outputDir,
                                         nbSamples=5,
                                         sampleMaxSize=3.0)
     print("Done. Slab width: " + str(slabWidth))
+"""
+
+def extractBigBrainSamples(args):
+    '''Extract samples from the big brain nii.gz file using nibabel.'''
+
+    if not os.path.isfile(args.bigBrainPath) or not os.path.isdir(args.outputDir):
+        print("File not file error {0} or {1}".format(args.bigBrainPath, args.outputDir))
+        return
+
+    #get a proxy to the big brain file
+    proxy = nib.load(args.bigBrainPath) #proxy image from nibabel
+
+    #get info about the image
+    bbY = proxy.shape[0]
+    bbZ = proxy.shape[1]
+    bbX = proxy.shape[2]
+
+    nbY = int(math.floor(float(bbY)/args.ySize))
+    nbZ = int(math.floor(float(bbZ)/args.zSize))
+    nbX = int(math.floor(float(bbX)/args.xSize))
+
+    for y in range(nbY):
+        for z in range(nbZ):
+            for x in range(nbX):
+
+                #extract a sample, create new img and save
+                sample = proxy.dataobj[y*args.ySize:(y+1)*args.ySize,
+                                        z*args.zSize:(z+1)*args.zSize,
+                                        x*args.xSize:(x+1)*args.xSize]
+
+                arrayImg = nib.Nifti1Image(sample, proxy.affine) #create new nifti img
+                nib.save(arrayImg, os.path.join(args.outputDir,'bigBrainSample{0}-{1}-{2}.nii'.format(y,z,x)))
+                print("Processed sample {0}-{1}-{2}".format(y,z,x))
+    return
+
+def argsManager():
+    """ Parser to manage command line arguments.
+    Return:
+        args: List of parsed arguments and associated values.
+    """
+    parser = argparse.ArgumentParser(description="Algorithm to split big brain into smallest chunks for experimentations")
+    parser.add_argument("bigBrainPath", help="", type=str)
+    parser.add_argument("outputDir", help="", type=str)
+    parser.add_argument("ySize", help="", type=int)
+    parser.add_argument("zSize", help="", type=int)
+    parser.add_argument("xSize", help="", type=int)
+    return parser.parse_args()
+
+if __name__ == "__main__":
+    args=argsManager()
+    extractBigBrainSamples(args)
