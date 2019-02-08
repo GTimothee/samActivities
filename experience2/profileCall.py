@@ -1,6 +1,9 @@
-import timeit, random, os
+import timeit, random, os, csv
 
 nb_repeats = 8
+csv_file = open("output.csv", "w+")
+out_writer = csv.writer(csv_file)
+out_writer.writerow(["hardware_type", "file_system", "function", "iteration", "seek_distance", "time"])#write header
 
 def seeks_(seek_dist):
     setup = '''import os; \
@@ -13,8 +16,9 @@ def seeks_(seek_dist):
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('tmpfs')
-    print(times)
+
+    for i, t in enumerate(times):
+        out_writer.writerow(["ram", "tmpfs", "seeks_", str(i), str(seek_dist), str(t)])
 
     setup = '''import os; \
     filename = '/run/media/user/HDD 1TB/workspace/bigdataneurolab/history_of_maths.txt'; \
@@ -25,8 +29,8 @@ def seeks_(seek_dist):
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('hdd')
-    print(times)
+    for i, t in enumerate(times):
+        out_writer.writerow(["hdd", "ext4", "seeks_", str(i), str(seek_dist), str(t)])
 
 def random():
     setup = '''import os, random; \
@@ -39,8 +43,8 @@ def random():
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('time for random')
-    print(times)
+    for i, t in enumerate(times):
+        out_writer.writerow(["","", "random", str(i), "", str(t)])
 
 def seeks_random():
     setup = '''import os, random; \
@@ -56,8 +60,8 @@ def seeks_random():
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('tmpfs')
-    print(times)
+    for i, t in enumerate(times):
+        out_writer.writerow(["ram", "tmpfs", "seeks_random", str(i), "", str(t)])
 
     setup = '''import os, random; \
     filename = '/run/media/user/HDD 1TB/workspace/bigdataneurolab/history_of_maths.txt'; \
@@ -70,15 +74,17 @@ def seeks_random():
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('hdd')
-    print(times)
+    for i, t in enumerate(times):
+        out_writer.writerow(["hdd", "ext4", "seeks_random", str(i), "", str(t)])
 
 def seek_and_(seek_dist, isread):
     function = 'write("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit")'
     mode="w"
+    func_name = "write"
     if isread:
         function = 'read(10000)'
         mode="r"
+        func_name = "read"
 
     setup = "import os; \
     filename = '/dev/shm/history_of_maths.txt'; \
@@ -87,14 +93,18 @@ def seek_and_(seek_dist, isread):
 
     stmt = "file.seek( " + str(seek_dist) + " ); \
     file." + function + ";\
-    file.seek(0)"
+    file.seek(0);"
+
+    if isread:
+        stmt = stmt + "os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches');"
 
     times=timeit.repeat(setup=setup,
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('tmpfs')
-    print(times)
+
+    for i, t in enumerate(times):
+        out_writer.writerow(["ram", "tmpfs", "seek_and_" + func_name, str(i), str(seek_dist), str(t)])
 
     setup = "import os; \
     filename = '/run/media/user/HDD 1TB/workspace/bigdataneurolab/history_of_maths.txt'; \
@@ -105,30 +115,31 @@ def seek_and_(seek_dist, isread):
                     stmt=stmt,
                     number=10000000,
                     repeat=nb_repeats)
-    print('hdd')
-    print(times)
+
+    for i, t in enumerate(times):
+        out_writer.writerow(["hdd", "ext4", "seek_and_" + func_name, str(i), str(seek_dist), str(t)])
 
 
 if __name__ == "__main__":
-    #print("RANDOM")
-    #random()
+    print("RANDOM")
+    random()
 
-    #print("RANDOM SEEKS")
-    #seeks_random()
+    print("RANDOM SEEKS")
+    seeks_random()
 
-    """print("READ")
+    print("READ")
     for seek_dist in [5000, 50000, 100000, 500000]:
         print('seek dist :', seek_dist)
-        seek_and_(seek_dist, True)"""
+        seek_and_(seek_dist, True)
 
     print("WRITE")
     for seek_dist in [5000, 50000, 100000, 500000]:
         print('seek dist :', seek_dist)
         seek_and_(seek_dist, False)
 
-
-    """
     print("SEEKS")
     for seek_dist in [0, 100, 1000, 5000, 10000, 50000, 100000, 500000]:
         print('seek dist :', seek_dist)
-        seeks_(seek_dist)"""
+        seeks_(seek_dist)
+
+    csv_file.close()
