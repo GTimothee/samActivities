@@ -1,6 +1,6 @@
 import nibabel as nib
 import numpy as np
-import imageutils as iu
+#import imageutils as iu
 import os, sys
 import math
 from time import time
@@ -129,4 +129,6 @@ def argsManager():
 
 if __name__ == "__main__":
     args=argsManager()
+    if not os.path.isdir(args.outputDir):
+        os.mkdir(args.outputDir, 0o755)
     extractBigBrainSamples(args)

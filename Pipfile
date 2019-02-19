@@ -6,10 +6,8 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-jupyter = "*"
-ipykernel = "*"
-matplotlib = "*"
-pandas = "*"
+nibabel = "*"
+enum34 = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "2.7"

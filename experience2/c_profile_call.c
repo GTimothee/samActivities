@@ -7,8 +7,8 @@
 #include <sys/types.h>
 #include <time.h>
 
-enum Spec {TMPFS = 0, HDD = 1, SSD = 2}; 
-char * file_names[3] = {"test.txt","test.txt","test.txt"};
+enum Spec {TMPFS = 0, HDD = 1, SSD = 2};
+char * file_names[3] = {"/dev/shm/book.txt","/mnt/hdd/book.txt","./book.txt"};
 
 typedef struct Profiles{
     double pread_t;
@@ -16,27 +16,27 @@ typedef struct Profiles{
 }profiles;
 
 double profile_seek_and_read(int fd){
-    clock_t t; 
+    clock_t t;
     char buffer[120];
     int offset = 0;
-    
-    t = clock(); 
+
+    t = clock();
     off_t of = lseek(fd, offset, SEEK_SET);
     ssize_t nr = read(fd, buffer, 120);
-    t = clock() - t; 
+    t = clock() - t;
     return ((double)t)/CLOCKS_PER_SEC;
 }
 
 double profile_pread(int fd){
-    clock_t t; 
+    clock_t t;
     char buffer[120];
     int offset = 0;
-    
-    t = clock(); 
+
+    t = clock();
     ssize_t nr = pread(fd, buffer, 120, offset);
-    t = clock() - t; 
+    t = clock() - t;
     return ((double)t)/CLOCKS_PER_SEC;
-    
+
 }
 
 profiles * profile_it(int nb_its,int spec){
@@ -45,8 +45,8 @@ profiles * profile_it(int nb_its,int spec){
     int fd = open(file_name,O_RDONLY);
 
     prof->pread_t = 0.0;
-    prof->seek_and_read_t=0.0; 
-    
+    prof->seek_and_read_t=0.0;
+
     if(fd>=0){
         for(int j =0; j<nb_its; j++){
             prof->pread_t+=profile_pread(fd);
@@ -61,7 +61,7 @@ profiles * profile_it(int nb_its,int spec){
 }
 
 void write_output(profiles** profs, int nb_its, int spec){
-    FILE * file = fopen("c_syscall_output.csv","w+");
+    FILE * file = fopen("c_profile_call_pread.csv","w+");
     fprintf(file, "pread_time, seek_and_read_time, file_path\n");
     for(int k=0; k<nb_its;k++){
         fprintf(file, "%f, %f, %s\n", profs[k]->pread_t, profs[k]->seek_and_read_t, file_names[spec]);
