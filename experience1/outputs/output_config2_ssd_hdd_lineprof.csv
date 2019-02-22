@@ -1,0 +1,7 @@
+sample,hardware_type,file_system,strategy,split_time,merge_time
+bigBrainSample0-1-1.nii,ssd,ext4,Strategy.MULTIPLE,43.16141605377197,85.38871955871582
+bigBrainSample0-1-1.nii,ssd,ext4,Strategy.NAIVE,120.2533106803894,124.16234922409058
+bigBrainSample0-1-1.nii,hdd,ext4,Strategy.MULTIPLE,71.24616289138794,112.83691048622131
+bigBrainSample0-1-1.nii,hdd,ext4,Strategy.CLUSTERED,102.71515464782715,126.73485255241394
+bigBrainSample0-1-1.nii,ssd,ext4,Strategy.CLUSTERED,34.44359350204468,109.44857120513916
+bigBrainSample0-1-1.nii,hdd,ext4,Strategy.NAIVE,153.77328372001648,141.1138036251068
