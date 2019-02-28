@@ -12,7 +12,7 @@ import argparse
 import random
 
 import imp
-iu = imp.load_source('module.name', '/home/tim/projects/sam/sam/imageutils.py')
+iu = imp.load_source('module.name', '/home/tim/projects/sam_orig/sam/sam/imageutils.py')
 
 #Program to test the speed of splitting and merging on both HDD and tmpfs
 
@@ -253,7 +253,7 @@ def applyMerge(config, outputFilePath, legendFilePath, strategy):
     if mergeStrategy=="naive":
         mergeStrategy="clustered"
     t=time()
-    stats_dict = img.merge(legendFilePath, mergeStrategy, int(config['merge']["mem"][strategy.lower()]))
+    stats_dict = img.reconstruct_img(legendFilePath, mergeStrategy, int(config['merge']["mem"][strategy.lower()]))
     t=time()-t
     stats_dict = dict()
     stats_dict['merge_time']=t
