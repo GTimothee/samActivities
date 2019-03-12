@@ -148,7 +148,8 @@ def benchmarking(args):
                                     strategy=run['strategy'],
                                     config=config,
                                     mergeFileName=run['fileName'] + "MergedBack.nii",
-                                    importFile=importFile)
+                                    importFile=importFile,
+                                    flushCaches=True)
 
             #write stats
             writer.writerow([run['fileName'], run['hardware'], run['filesystem'], run['strategy'],
