@@ -6,10 +6,10 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-jupyter = "*"
-notebook = "*"
-matplotlib = "*"
-pandas = "*"
+nibabel = "*"
+six = "*"
+scipy = "*"
+enum34 = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.6"

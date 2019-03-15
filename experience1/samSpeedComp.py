@@ -1,5 +1,5 @@
 import nibabel as nib
-import numpy as nps
+import numpy as np
 import os, sys
 import math
 from time import time
@@ -10,7 +10,7 @@ import json
 import argparse
 import random
 import imp
-iu = imp.load_source('module.name', '/home/tim/projects/sam_orig/sam/sam/imageutils.py')
+from sam import imageutils as iu
 
 #Program to test the speed of splitting and merging on SSD ext4, HDD ext4 and/or shared memory tmpfs
 
@@ -73,6 +73,7 @@ def big_brain_processing(args):
                                         importFile=False,
                                         flushCaches=False)
                 #write stats
+                print(list(splitStatsDict.keys))
                 writer.writerow([filePath, hardware, 'ext4', rstrategy,
                                         splitStatsDict['split_time'], mergeStatsDict['merge_time'],
                                         splitStatsDict['split_nb_seeks'], mergeStatsDict['merge_nb_seeks'],
@@ -152,6 +153,7 @@ def benchmarking(args):
                                     flushCaches=True)
 
             #write stats
+            print(list(mergeStatsDict.keys()))
             writer.writerow([run['fileName'], run['hardware'], run['filesystem'], run['strategy'],
                                     splitStatsDict['split_time'], mergeStatsDict['merge_time'],
                                     splitStatsDict['split_nb_seeks'], mergeStatsDict['merge_nb_seeks'],
@@ -288,9 +290,8 @@ def apply_merge(config, outputFilePath, legendFilePath, strategy):
     if mergeStrategy=="naive":
         mergeStrategy="clustered"
     t=time()
-    stats_dict = img.merge(legendFilePath, mergeStrategy, int(config['merge']["mem"][strategy.lower()]), True) # benchmark=True to get stats dict from function
+    stats_dict = img.merge(legendFilePath, mergeStrategy, int(config['merge']["mem"][strategy.lower()]), benchmark=True) # benchmark=True to get stats dict from function
     t=time()-t
-    stats_dict = dict()
     stats_dict['merge_time']=t
     print("Processing time to merge " + outputFilePath + " using " + str(strategy) +  ": " + str(t) + " seconds." )
     return stats_dict
