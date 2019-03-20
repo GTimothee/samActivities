@@ -22,9 +22,9 @@ class Strategy(Enum):
 translator = {'NAIVE':'clustered',
               'CLUSTERED':'clustered',
               'MULTIPLE':'multiple',
-              'naive':3,
-              'clustered':1,
-              'multiple':2}
+              'naive':list(Strategy)[2],
+              'clustered':list(Strategy)[1],
+              'multiple':list(Strategy)[0]}
 
 def extract_args(args):
     """ From a file path and the id of a run we extract the arguments of the program.
@@ -49,7 +49,7 @@ def benchmarking(args):
 
     """
 
-    with open(args['configFilePath'] as jsonFile:
+    with open(args['configFilePath']) as jsonFile:
         config = json.load(jsonFile)
 
     with open(args['outputCsvFilePath'], "w+") as csvFile:
@@ -65,12 +65,13 @@ def benchmarking(args):
 
         #create the runs to execute
         runs = list()
-        for fileName in os.listdir(args['bigBrainSamplDirPathHdd'])[:args['nbSamplesToTreat']]: #testing on 5 samples should be enough, at least for the moment
+        possible_dirs = [path for path in [args['bigBrainSamplDirPathSsd'], args['bigBrainSamplDirPathHdd'], args['bigBrainSamplDirPathTmpfs']] if not path == "none"]
+        for fileName in os.listdir(possible_dirs[0])[:int(args['nbSamplesToTreat'])]: # testing on 5 samples should be enough, at least for the moment
             if not fileName.endswith("nii"):
                 continue
 
             for strategy in list(map(lambda x: translator[x], args['strategies'])):
-                for i in range(args['nbRuns']):
+                for i in range(int(args['nbRuns'])):
                     if not args['bigBrainSamplDirPathTmpfs'] == "none":
                         runs.append({'fileName':fileName,
                                         'strategy':strategy,
@@ -78,7 +79,7 @@ def benchmarking(args):
                                         'filesystem':'tmpfs',
                                         'bigBrainSamplDir':args['bigBrainSamplDirPathTmpfs'],
                                         'splitDir':args['splitsDirPathTmpfs']})
-                    if not args.bigBrainSamplDirPathHdd == "none":
+                    if not args['bigBrainSamplDirPathHdd'] == "none":
                         runs.append({'fileName':fileName,
                                         'strategy':strategy,
                                         'hardware':'hdd',
@@ -86,7 +87,7 @@ def benchmarking(args):
                                         'bigBrainSamplDir':args['bigBrainSamplDirPathHdd'],
                                         'splitDir':args['splitsDirPathHdd']})
 
-                    if not args.bigBrainSamplDirPathSsd == "none":
+                    if not args['bigBrainSamplDirPathSsd'] == "none":
                         runs.append({'fileName':fileName,
                                         'strategy':strategy,
                                         'hardware':'ssd',

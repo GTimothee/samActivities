@@ -1,12 +1,12 @@
 {
 "big_brain_total_1":{
         "config":{
-                "bigBrainSamplDirPathTmpfs":"",
+                "bigBrainSamplDirPathTmpfs":"none",
                 "bigBrainSamplDirPathSsd":"/home/tim/data/bigbrain",
                 "bigBrainSamplDirPathHdd":"/mnt/hdd/bigbrain",
-                "outputCsvFilePath":"/outputs/bigbraintotal_1.csv",
+                "outputCsvFilePath":"outputs/bigbraintotal_1.csv",
                 "configFilePath":"config_files/config2.json",
-                "splitsDirPathTmpfs":"",
+                "splitsDirPathTmpfs":"none",
                 "splitsDirPathSsd":"/home/tim/data/bigbrainsplitted",
                 "splitsDirPathHdd":"/mnt/hdd/bigbrainsplitted",
                 "nbSamplesToTreat":"1",
@@ -19,14 +19,14 @@
 },
 "samples_1":{
 	"config":{
-	        "bigBrainSamplDirPathTmpfs":"",
+	        "bigBrainSamplDirPathTmpfs":"none",
 	       	"bigBrainSamplDirPathSsd":"/home/tim/data/big_brain_samples",
-	        "bigBrainSamplDirPathHdd":"",
-	        "outputCsvFilePath":"/outputs/samples_1.csv",
+	        "bigBrainSamplDirPathHdd":"none",
+	        "outputCsvFilePath":"outputs/samples_1.csv",
  	        "configFilePath":"config_files/config2.json",
-	        "splitsDirPathTmpfs":"",
+	        "splitsDirPathTmpfs":"none",
 	        "splitsDirPathSsd":"/home/tim/data/splitted",
-	        "splitsDirPathHdd":"",
+	        "splitsDirPathHdd":"none",
 	        "nbSamplesToTreat":"1",
 	        "nbRuns":"1",
 		"strategies":["clustered"]
