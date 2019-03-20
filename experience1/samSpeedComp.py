@@ -164,7 +164,7 @@ def apply_split_and_merge(splitDir, filePathHdd, fileToSplitPath, strategy, conf
                         outputFilePath=os.path.join(splitDir, mergeFileName),
                         legendFilePath=os.path.join(splitDir, "legend.txt"),
                         strategy= strategy.name)
-
+    print(splitStatsDict, '\n', mergeStatsDict)
     return splitStatsDict, mergeStatsDict
 
 def apply_split(config, filePath, outputDir, outputFileName, strategy):
