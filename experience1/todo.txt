@@ -1,0 +1,5 @@
+-run on 1 sample merge only & observe the writing time
+-run on whole big brain with conditions of paper on merge only
+
+
+

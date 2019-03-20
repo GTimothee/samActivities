@@ -21,12 +21,17 @@ class Strategy(Enum):
 
 translator = {'NAIVE':'clustered',
               'CLUSTERED':'clustered',
-              'MULTIPLE':'multiple'}
+              'MULTIPLE':'multiple',
+              'naive':3,
+              'clustered':1,
+              'multiple':2}
 
 def extract_args(args):
+    """ From a file path and the id of a run we extract the arguments of the program.
+    """
     with open(args.runs_file_path) as json_file:
-	args = json.load(json_file)[args.run_id]['config']
-    return dict(args) 
+	       args = json.load(json_file)[args.run_id]['config']
+    return dict(args)
 
 def args_manager():
     """ Parser to manage command line arguments.
@@ -34,49 +39,9 @@ def args_manager():
         args: List of parsed arguments and associated values.
     """
     parser = argparse.ArgumentParser(description="Benchmarking program to evaluate split/merge efficiency.")
-    parser.add_argument("runs_file_path", help="", type=str)
-    parser.add_argument("run_id", help="", type=str)
+    parser.add_argument("runs_file_path", help="File path to the json file containing information about all runs.", type=str)
+    parser.add_argument("run_id", help="Name of the run you want to run.", type=str)
     return extract_args(parser.parse_args())
-
-def big_brain_processing(args):
-    with open(args.configFilePath) as jsonFile:
-        config = json.load(jsonFile)
-
-    with open(args.outputCsvFilePath, "w+") as csvFile:
-        writer = csv.writer(csvFile)
-        writer.writerow(["sample", "hardware_type", "file_system", "strategy", #output csv file's header
-                            "split_time", "merge_time",
-                            "split_nb_seeks", "merge_nb_seeks",
-                            "split_read_time", "merge_read_time",
-                            "split_write_time", "merge_write_time",
-                            "split_seek_time", "merge_seek_time"])
-
-        for hardware in ['hdd', 'ssd']:
-            for strategy in random.shuffle(list(Strategy)):
-                os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
-                if hardware == 'hdd':
-                    filePath = args.bigBrainFilePathHdd
-                else:
-                    filePath = args.bigBrainFilePathSsd
-
-                #do split and merge
-                splitStatsDict, mergeStatsDict = apply_split_and_merge(splitDir=run['splitDir'],
-                                        filePathHdd = None,
-                                        fileToSplitPath=filePath,
-                                        strategy=strategy,
-                                        config=config,
-                                        mergeFileName="totalBigBrainMergedBack.nii",
-                                        importFile=False,
-                                        flushCaches=True)
-                #write stats
-                print(list(splitStatsDict.keys))
-                writer.writerow([filePath, hardware, 'ext4', rstrategy,
-                                        splitStatsDict['split_time'], mergeStatsDict['merge_time'],
-                                        splitStatsDict['split_nb_seeks'], mergeStatsDict['merge_nb_seeks'],
-                                        splitStatsDict['split_read_time'], mergeStatsDict['merge_read_time'],
-                                        splitStatsDict['split_write_time'], mergeStatsDict['merge_write_time'],
-                                        splitStatsDict['split_seek_time'], mergeStatsDict['merge_seek_time']])
-        csvFile.close()
 
 def benchmarking(args):
     """Main program which aimed, for each sample of big brain, at splitting it and then re-merging it.
@@ -84,10 +49,10 @@ def benchmarking(args):
 
     """
 
-    with open(args.configFilePath) as jsonFile:
+    with open(args['configFilePath'] as jsonFile:
         config = json.load(jsonFile)
 
-    with open(args.outputCsvFilePath, "w+") as csvFile:
+    with open(args['outputCsvFilePath'], "w+") as csvFile:
         writer = csv.writer(csvFile)
 
         #output csv file's header
@@ -100,34 +65,34 @@ def benchmarking(args):
 
         #create the runs to execute
         runs = list()
-        for fileName in os.listdir(args.bigBrainSamplDirPathHdd)[:args.nbSamplesToTreat]: #testing on 5 samples should be enough, at least for the moment
+        for fileName in os.listdir(args['bigBrainSamplDirPathHdd'])[:args['nbSamplesToTreat']]: #testing on 5 samples should be enough, at least for the moment
             if not fileName.endswith("nii"):
                 continue
 
-            for strategy in list(Strategy):
-                for i in range(args.nbRuns):
-                    if not args.bigBrainSamplDirPathTmpfs == "none":
+            for strategy in list(map(lambda x: translator[x], args['strategies'])):
+                for i in range(args['nbRuns']):
+                    if not args['bigBrainSamplDirPathTmpfs'] == "none":
                         runs.append({'fileName':fileName,
                                         'strategy':strategy,
                                         'hardware':'ram',
                                         'filesystem':'tmpfs',
-                                        'bigBrainSamplDir':args.bigBrainSamplDirPathTmpfs,
-                                        'splitDir':args.splitsDirPathTmpfs})
+                                        'bigBrainSamplDir':args['bigBrainSamplDirPathTmpfs'],
+                                        'splitDir':args['splitsDirPathTmpfs']})
                     if not args.bigBrainSamplDirPathHdd == "none":
                         runs.append({'fileName':fileName,
                                         'strategy':strategy,
                                         'hardware':'hdd',
                                         'filesystem':'ext4',
-                                        'bigBrainSamplDir':args.bigBrainSamplDirPathHdd,
-                                        'splitDir':args.splitsDirPathHdd})
+                                        'bigBrainSamplDir':args['bigBrainSamplDirPathHdd'],
+                                        'splitDir':args['splitsDirPathHdd']})
 
                     if not args.bigBrainSamplDirPathSsd == "none":
                         runs.append({'fileName':fileName,
                                         'strategy':strategy,
                                         'hardware':'ssd',
                                         'filesystem':'ext4',
-                                        'bigBrainSamplDir':args.bigBrainSamplDirPathSsd,
-                                        'splitDir':args.splitsDirPathSsd})
+                                        'bigBrainSamplDir':args['bigBrainSamplDirPathSsd'],
+                                        'splitDir':args['splitsDirPathSsd']})
 
         random.shuffle(runs)
 
@@ -140,7 +105,7 @@ def benchmarking(args):
 
             #do split and merge
             splitStatsDict, mergeStatsDict = apply_split_and_merge(splitDir=run['splitDir'],
-                                    filePathHdd = os.path.join(args.bigBrainSamplDirPathHdd, run['fileName']),
+                                    filePathHdd = os.path.join(args['bigBrainSamplDirPathHdd'], run['fileName']),
                                     fileToSplitPath=os.path.join(run['bigBrainSamplDir'], run['fileName']),
                                     strategy=run['strategy'],
                                     config=config,
@@ -275,24 +240,23 @@ def apply_merge(config, outputFilePath, legendFilePath, strategy):
     """
 
     #open a new image object
-    img=iu.ImageUtils(outputFilePath,
+    img = iu.ImageUtils(outputFilePath,
                         first_dim = int(config['merge']["first_dim"]),
                         second_dim = int(config['merge']["second_dim"]),
                         third_dim = int(config['merge']["third_dim"]),
                         dtype = np.uint16)
 
     #apply the merge
-    mergeStrategy=strategy.lower()
-    if mergeStrategy=="naive":
-        mergeStrategy="clustered"
-    t=time()
+    mergeStrategy = strategy.lower()
+    if mergeStrategy == "naive":
+        mergeStrategy = "clustered"
+    t = time()
     stats_dict = img.merge(legendFilePath, mergeStrategy, int(config['merge']["mem"][strategy.lower()]), benchmark=True) # benchmark=True to get stats dict from function
-    t=time()-t
+    t = time() - t
     stats_dict['merge_time']=t
     print("Processing time to merge " + outputFilePath + " using " + str(strategy) +  ": " + str(t) + " seconds." )
     return stats_dict
 
 if __name__ == "__main__":
-    args=args_manager()
-    #benchmarking(args)
-    big_brain_processing()
+    args = args_manager()
+    benchmarking(args)
