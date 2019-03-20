@@ -1,0 +1,38 @@
+{
+"big_brain_total_1":{
+        "config":{
+                "bigBrainSamplDirPathTmpfs":"",
+                "bigBrainSamplDirPathSsd":"/home/tim/data/bigbrain",
+                "bigBrainSamplDirPathHdd":"/mnt/hdd/bigbrain",
+                "outputCsvFilePath":"/outputs/bigbraintotal_1.csv",
+                "configFilePath":"config_files/config2.json",
+                "splitsDirPathTmpfs":"",
+                "splitsDirPathSsd":"/home/tim/data/bigbrainsplitted",
+                "splitsDirPathHdd":"/mnt/hdd/bigbrainsplitted",
+                "nbSamplesToTreat":"1",
+                "nbRuns":"1",
+		"strategies":["naive","clustered","multiple"]
+        },
+        "metadata":{
+                "sam version":"added pwrites and refactored"
+        }
+},
+"samples_1":{
+	"config":{
+	        "bigBrainSamplDirPathTmpfs":"",
+	       	"bigBrainSamplDirPathSsd":"/home/tim/data/big_brain_samples",
+	        "bigBrainSamplDirPathHdd":"",
+	        "outputCsvFilePath":"/outputs/samples_1.csv",
+ 	        "configFilePath":"config_files/config2.json",
+	        "splitsDirPathTmpfs":"",
+	        "splitsDirPathSsd":"/home/tim/data/splitted",
+	        "splitsDirPathHdd":"",
+	        "nbSamplesToTreat":"1",
+	        "nbRuns":"1",
+		"strategies":["clustered"]
+	},
+	"metadata":{
+		"sam version":"added pwrites and refactored"
+	}
+}
+}

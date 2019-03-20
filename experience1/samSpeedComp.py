@@ -15,33 +15,28 @@ from sam import imageutils as iu
 #Program to test the speed of splitting and merging on SSD ext4, HDD ext4 and/or shared memory tmpfs
 
 class Strategy(Enum):
-    MULTIPLE=2
-    CLUSTERED=1
+    MULTIPLE = 2
+    CLUSTERED = 1
     NAIVE = 3
 
-translator = {
-        'NAIVE':'clustered',
-        'CLUSTERED':'clustered',
-        'MULTIPLE':'multiple'}
+translator = {'NAIVE':'clustered',
+              'CLUSTERED':'clustered',
+              'MULTIPLE':'multiple'}
+
+def extract_args(args):
+    with open(args.runs_file_path) as json_file:
+	args = json.load(json_file)[args.run_id]['config']
+    return dict(args) 
 
 def args_manager():
     """ Parser to manage command line arguments.
-
     Return:
         args: List of parsed arguments and associated values.
     """
     parser = argparse.ArgumentParser(description="Benchmarking program to evaluate split/merge efficiency.")
-    parser.add_argument("bigBrainSamplDirPathTmpfs", help="", type=str)
-    parser.add_argument("bigBrainSamplDirPathSsd", help="", type=str)
-    parser.add_argument("bigBrainSamplDirPathHdd", help="", type=str)
-    parser.add_argument("outputCsvFilePath", help="", type=str)
-    parser.add_argument("configFilePath", help="", type=str)
-    parser.add_argument("splitsDirPathTmpfs", help="", type=str)
-    parser.add_argument("splitsDirPathSsd", help="", type=str)
-    parser.add_argument("splitsDirPathHdd", help="", type=str)
-    parser.add_argument("nbSamplesToTreat", help="", type=int)
-    parser.add_argument("nbRuns", help="", type=int)
-    return parser.parse_args()
+    parser.add_argument("runs_file_path", help="", type=str)
+    parser.add_argument("run_id", help="", type=str)
+    return extract_args(parser.parse_args())
 
 def big_brain_processing(args):
     with open(args.configFilePath) as jsonFile:
@@ -60,9 +55,10 @@ def big_brain_processing(args):
             for strategy in random.shuffle(list(Strategy)):
                 os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
                 if hardware == 'hdd':
-                    filePath=args.bigBrainFilePathHdd
+                    filePath = args.bigBrainFilePathHdd
                 else:
-                    filePath=args.bigBrainFilePathSsd
+                    filePath = args.bigBrainFilePathSsd
+
                 #do split and merge
                 splitStatsDict, mergeStatsDict = apply_split_and_merge(splitDir=run['splitDir'],
                                         filePathHdd = None,
@@ -71,7 +67,7 @@ def big_brain_processing(args):
                                         config=config,
                                         mergeFileName="totalBigBrainMergedBack.nii",
                                         importFile=False,
-                                        flushCaches=False)
+                                        flushCaches=True)
                 #write stats
                 print(list(splitStatsDict.keys))
                 writer.writerow([filePath, hardware, 'ext4', rstrategy,
@@ -298,4 +294,5 @@ def apply_merge(config, outputFilePath, legendFilePath, strategy):
 
 if __name__ == "__main__":
     args=args_manager()
-    benchmarking(args)
+    #benchmarking(args)
+    big_brain_processing()
