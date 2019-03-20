@@ -114,6 +114,16 @@ def benchmarking(args):
                                     importFile=importFile,
                                     flushCaches=True)
 
+            print('Checking output integrity...')
+            img1 = nib.load(fileToSplitPath)
+            img1_data = img1.get_fdata()
+            img2 = nib.load(mergeFileName)
+            img2_data = img2.get_fdata()
+            if (not img1_data.shape == img2_data.shape or not (img1_data == img2_data).all() or not img1.header == img2.header):
+                print('Itegrity check failed. Something went wrong.')
+            else:
+                print('Sanity check successful: image successfully reconstructed.')
+
             #write stats
             print(list(mergeStatsDict.keys()))
             writer.writerow([run['fileName'], run['hardware'], run['filesystem'], run['strategy'],
