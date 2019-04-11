@@ -29,10 +29,49 @@
 	        "splitsDirPathHdd":"none",
 	        "nbSamplesToTreat":"1",
 	        "nbRuns":"1",
-		"strategies":["clustered"]
+		    "strategies":["clustered"]
 	},
 	"metadata":{
-		"sam version":"added pwrites and refactored"
+		"sam version":"added pwrites and refactored",
+        "note":"testing on ssd"
 	}
+},
+"samples_2":{
+    "config":{
+            "bigBrainSamplDirPathTmpfs":"none",
+            "bigBrainSamplDirPathSsd":"none",
+            "bigBrainSamplDirPathHdd":"/mnt/hdd/big_brain_samples",
+            "outputCsvFilePath":"outputs/samples_2.csv",
+            "configFilePath":"config_files/config2.json",
+            "splitsDirPathTmpfs":"none",
+            "splitsDirPathSsd":"none",
+            "splitsDirPathHdd":"/mnt/hdd/splitted",
+            "nbSamplesToTreat":"1",
+            "nbRuns":"1",
+            "strategies":["clustered"]
+    },  
+    "metadata":{
+        "sam version":"added pwrites and refactored",
+        "note":"testing on hdd"
+    }
+},
+"samples_3":{
+    "config":{
+            "bigBrainSamplDirPathTmpfs":"none",
+            "bigBrainSamplDirPathSsd":"/home/tim/data/big_brain_samples",
+            "bigBrainSamplDirPathHdd":"none",
+            "outputCsvFilePath":"outputs/samples_3.csv",
+            "configFilePath":"config_files/config2.json",
+            "splitsDirPathTmpfs":"none",
+            "splitsDirPathSsd":"/home/tim/data/splitted",
+            "splitsDirPathHdd":"none",
+            "nbSamplesToTreat":"1",
+            "nbRuns":"1",
+            "strategies":["clustered"]
+    },
+    "metadata":{
+        "sam version":"added pwrites and refactored",
+        "note":"testing on ssd + remove flushing cache to see difference in processing time"
+    }
 }
 }

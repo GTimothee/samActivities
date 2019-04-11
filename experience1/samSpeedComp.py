@@ -11,6 +11,7 @@ import argparse
 import random
 import imp
 from sam import imageutils as iu
+import subprocess
 
 #Program to test the speed of splitting and merging on SSD ext4, HDD ext4 and/or shared memory tmpfs
 
@@ -66,6 +67,7 @@ def benchmarking(args):
         #create the runs to execute
         runs = list()
         possible_dirs = [path for path in [args['bigBrainSamplDirPathSsd'], args['bigBrainSamplDirPathHdd'], args['bigBrainSamplDirPathTmpfs']] if not path == "none"]
+        print("possible dirs:", possible_dirs)
         for fileName in os.listdir(possible_dirs[0])[:int(args['nbSamplesToTreat'])]: # testing on 5 samples should be enough, at least for the moment
             if not fileName.endswith("nii"):
                 continue
@@ -96,9 +98,10 @@ def benchmarking(args):
                                         'splitDir':args['splitsDirPathSsd']})
 
         random.shuffle(runs)
-
+        print("start runs")
         #for each input file (sample of big brain)
         for run in runs:
+            print("run loop")
 
             importFile = False
             if run['filesystem'] == 'tmpfs':
@@ -115,14 +118,10 @@ def benchmarking(args):
                                     flushCaches=True)
 
             print('Checking output integrity...')
-            img1 = nib.load(fileToSplitPath)
-            img1_data = img1.get_fdata()
-            img2 = nib.load(mergeFileName)
-            img2_data = img2.get_fdata()
-            if (not img1_data.shape == img2_data.shape or not (img1_data == img2_data).all() or not img1.header == img2.header):
-                print('Itegrity check failed. Something went wrong.')
-            else:
-                print('Sanity check successful: image successfully reconstructed.')
+            original_sample = os.path.join(run['bigBrainSamplDir'], run['fileName'])
+            reconstructed_sample = os.path.join(run['splitDir'], run['fileName'] + "MergedBack.nii")
+            print('original file size: ', os.path.getsize(original_sample))
+            print('resulting file size: ', os.path.getsize(reconstructed_sample))
 
             #write stats
             print(list(mergeStatsDict.keys()))
@@ -138,6 +137,28 @@ def benchmarking(args):
                 os.remove(os.path.join(run['splitDir'], f))
 
         csvFile.close()
+
+
+def get_mem_usage():
+    '''
+    Returns swap, buffer usage and cache usage, in this order.
+    '''
+    a = subprocess.check_output(['vmstat', '-a', '1', '1']).decode("utf-8")
+    print(a)
+    a = subprocess.check_output(['vmstat', '1', '1']).decode("utf-8")
+    print(a)
+    b = a.split('\n')[2].split()
+    swap = b[2]
+    buff = b[4]
+    cache = b[5]
+    active = b[7]
+    """print("swap")
+    print("buff", buff)
+    print("cache", cache)
+    print("active", active)
+    return swap, buff, cache, active
+    """
+    return
 
 def apply_split_and_merge(splitDir, filePathHdd, fileToSplitPath, strategy, config, mergeFileName, importFile, flushCaches):
     """ Split an input file and then merge it back.
@@ -156,12 +177,20 @@ def apply_split_and_merge(splitDir, filePathHdd, fileToSplitPath, strategy, conf
     if flushCaches:
         os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
+    print("first cache drop")
+    get_mem_usage()
+
+    print("splitting...")
     print(strategy.name)
     splitStatsDict = apply_split(config,
                         filePath=fileToSplitPath,
                         outputDir=splitDir,
                         outputFileName=translator[strategy.name], #splitName
                         strategy=strategy.name)
+
+
+    print("cache after splitting")
+    get_mem_usage()
 
     if importFile == True:
         os.remove(fileToSplitPath) #delete input file to save space
@@ -170,11 +199,23 @@ def apply_split_and_merge(splitDir, filePathHdd, fileToSplitPath, strategy, conf
     if flushCaches:
         os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
+
+    print("second cache drop")
+    get_mem_usage()
+
+    print("merging...")
     mergeStatsDict = apply_merge(config,
                         outputFilePath=os.path.join(splitDir, mergeFileName),
                         legendFilePath=os.path.join(splitDir, "legend.txt"),
                         strategy= strategy.name)
+
     print(splitStatsDict, '\n', mergeStatsDict)
+    print("after merging")
+    get_mem_usage()
+
+    print(splitStatsDict)
+    print(mergeStatsDict)
+
     return splitStatsDict, mergeStatsDict
 
 def apply_split(config, filePath, outputDir, outputFileName, strategy):
@@ -269,5 +310,7 @@ def apply_merge(config, outputFilePath, legendFilePath, strategy):
     return stats_dict
 
 if __name__ == "__main__":
+    print("get arguments")
     args = args_manager()
+    print("enter benchmarking process")
     benchmarking(args)

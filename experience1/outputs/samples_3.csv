@@ -1,2 +1,2 @@
 sample,hardware_type,file_system,strategy,split_time,merge_time,split_nb_seeks,merge_nb_seeks,split_read_time,merge_read_time,split_write_time,merge_write_time,split_seek_time,merge_seek_time
-bigBrainSample0-0-1.nii,ssd,ext4,Strategy.CLUSTERED,33.867722034454346,29.27837896347046,2824,3388009,20.27272343635559,0.041135311126708984,2.1196892261505127,9.763973236083984,0,0
+bigBrainSample0-0-1.nii,ssd,ext4,Strategy.CLUSTERED,21.001378774642944,26.087968349456787,2824,3388009,7.18295693397522,0.06412076950073242,2.2915525436401367,10.688182830810547,0,0
