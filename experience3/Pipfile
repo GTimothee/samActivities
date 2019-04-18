@@ -9,6 +9,7 @@ verify_ssl = true
 dask = {extras = ["complete"],version = "*"}
 ipykernel = "*"
 h5py = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.7"
