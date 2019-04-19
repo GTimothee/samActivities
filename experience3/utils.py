@@ -1,4 +1,15 @@
 """
+traiter sur toute limage
+un cas ou on est dans le meileur des cas et un cas ou on est dans le pire des cas
+comment se passe la lecture en utilisant dask
+impact du scheduler a la lecture
+
+donc les chunks ont un impact direct sur les seeks du fait de lextraction
+mais on veut pas modifier ça car on suppose que lapplication a ses raisons que ce soit
+sous ce format de chunk donc du coup on veut voir limpact des seeks sur les perfs de daskgiven a geometry de chunk et une geometry de fichier (formar de stockage de données)
+
+naive split avec une geometry coherente devrait etre plus rapide quavec une geometry random
+
 processing 3d arrays only for the moment
 
 2 paradimgs:
@@ -47,6 +58,8 @@ def get_dask_array_from_hdf5(file_path, key):
 
 
 def get_random_cubic_block(nb_elements, arr, seed):
+    """ Get a cubic block which contains nb_elements from array arr at a random position.
+    """
     random.seed(seed)
     dim_size = math.ceil(nb_elements**(1./3.))
     corner_index = [random.randint(0, arr.shape[i]-dim_size) for i in range(3)]
@@ -56,7 +69,7 @@ def get_random_cubic_block(nb_elements, arr, seed):
 
 
 def get_random_slab(nb_elements, arr, axis, seed):
-    """
+    """ Get a random slab which contains nb_elements from array arr at a random position.
     axis: 0 (y-axis) = horizontal slab, 1 (x-axis) or 2 (z-axis) = vertical slab
     """
     random.seed(seed)
@@ -74,7 +87,7 @@ def get_random_slab(nb_elements, arr, axis, seed):
 
 
 def get_random_rectangle_blocks(arr, shape, seed):
-    """
+    """ Get a random rectangle of shape 'shape' from array arr at a random position.
     shape has to be a tuple containing the width of the rectangle in the three dimensions
     """
     random.seed(seed)

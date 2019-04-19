@@ -15,7 +15,7 @@ def test_load_array_parts():
     slab_name = "slabs_out.npy"
     cubi_name = "cubic_blocks_out.npy"
     test_paths = [os.path.join("tests/", "test_" + filename) for filename in (rect_name, slab_name, cubi_name)]
-    true_paths = [os.path.join("tests/", filename) for filename in (rect_name, slab_name, cubi_name)]
+    true_paths = [os.path.join("tests/data/", filename) for filename in (rect_name, slab_name, cubi_name)]
 
     # random implementations
     out = load_array_parts(arr=arr, geometry="rectangle_blocks", shape=(100,100,100))
