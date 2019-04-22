@@ -19,6 +19,10 @@ processing 3d arrays only for the moment
 dask paradigm two cases:
     -1 big file
     -several chunks (more in the spirit of dask array usage using the specific formats of geo scientists)
+
+
+note: créer deux fichiers en chunked pour voir les différences → (juste a titre informatif pour voir les diférences de vitesse,
+ sachant que dans notre cas on utilisera les fichiers nii mais ca renseigne qd meme sur la portée de notre travail et pk pas prendre en compte)
 """
 
 
@@ -30,30 +34,48 @@ import math
 import random
 
 
-def create_random_cube(storage_type, file_path, shape, axis=0):
+def create_random_cube(storage_type, file_path, shape, axis=0, chunks_shape=None):
     """ Generate random cubic array from normal distribution and store it on disk.
         storage_type: string
         shape: tuple or integer
         file_path: has to contain the filename if hdf5 type, should not contain a filename if npy type.
         axis: for numpy: splitting dimension because numpy store matrices
+        chunks_shape: for hdf5 only (as far as i am concerned for the moment)
     """
     arr = da.random.normal(size=shape)
+    save_arr(arr, storage_type, file_path, key='/data', axis=axis, chunks_shape=chunks_shape)
+    return
+
+
+def save_arr(arr, storage_type, file_path, key='/data', axis=0, chunks_shape=None):
+    """ Save array to hdf5 dataset or numpy file stack.
+    """
     if storage_type == "hdf5":
-        da.to_hdf5(file_path, '/data', arr)
+        if chunks_shape:
+            da.to_hdf5(file_path, key, arr, chunks=chunks_shape)
+        else:
+            da.to_hdf5(file_path, key, arr)
     elif storage_type == "numpy":
         da.to_npy_stack(os.path.join(file_path, "npy/"), arr, axis=axis)
     return
 
 
-def get_dask_array_from_hdf5(file_path, key):
+def get_dask_array_from_hdf5(file_path="tests/data/sample.hdf5", cast=True, key='/data'):
     """
     file path: path to hdf5 file (string)
     key: key of the dictionary to retrieve data
+    cast: if you want to cast the dataset into a dask array.
+        If you want to do it yourself (ex for adjusting the chunks),
+        set this parameter to False.
     """
     f = h5py.File(file_path, 'r')
     if len(list(f.keys())) > 0:
-        return f[key]
+        if not cast:
+            return f[key]
+        dataset = f[key]
+        return da.from_array(dataset, chunks=dataset.chunks)
     else:
+        print('Key not found. Aborting.')
         return
 
 
@@ -124,31 +146,18 @@ def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, r
     return
 
 
-# dask paradigm
-def overwrite(geometry):
-    """ Rewrite the whole array with modifications.
-    Load 1 or more part of a too-big-for-memory array from file, modify it and overwrite it.
-    -given 1 or more parts (not necessarily close to each other)
-    -take into account geometry
-    -take into account storage type (unique_file or multiple_files) thanks to dask
+# neuroimaging paradigm
+def naive_split(geometry):
     """
-    pass
-
-
-# dask paradigm
-def resplit_arrray(in_geometry, out_geometry):
-    """ Rewrite the array file chunks with an other geometry.
-    Given a list of parts of array splitted in file chunks, resplit it with another geometry and write the result to files.
-    Dask paradigm in the sense that there is still one image, but splitted in the sense of the file chunks of this image.
+    Given a big file, split it into several files, following a given geometry.
+    <=> naive split algorithm
     """
     pass
 
 
 # neuroimaging paradigm
-def split_array_file(geometry):
-    """
-    Given a big file, split it into several files, following a given geometry.
-    <=> naive split algorithm
+def naive_merge(geometry):
+    """ Write multiple files into a big array file.
     """
     pass
 
@@ -159,12 +168,5 @@ def resplit_array(in_geometry, out_geometry):
     Given a too-big-for-memory array, resplit it.
     Neuroimaging paradigm in the sense that there is one file per image.
     Note to self: evaluate the different possible formats
-    """
-    pass
-
-
-# neuroimaging paradigm
-def merge(geometry):
-    """ Write multiple files into a big array file.
     """
     pass
