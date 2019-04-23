@@ -79,26 +79,32 @@ def get_dask_array_from_hdf5(file_path="tests/data/sample.hdf5", cast=True, key=
         return
 
 
-def get_random_cubic_block(nb_elements, arr, seed):
+def get_random_cubic_block(nb_elements, arr, seed, random=True, corner_index=(0, 0, 0)):
     """ Get a cubic block which contains nb_elements from array arr at a random position.
     """
-    random.seed(seed)
     dim_size = math.ceil(nb_elements**(1./3.))
-    corner_index = [random.randint(0, arr.shape[i]-dim_size) for i in range(3)]
+
+    if random:
+        random.seed(seed)
+        corner_index = [random.randint(0, arr.shape[i]-dim_size) for i in range(3)]
+
     return arr[corner_index[0]:corner_index[0] + dim_size,
                corner_index[1]:corner_index[1] + dim_size,
                corner_index[2]:corner_index[2] + dim_size]
 
 
-def get_random_slab(nb_elements, arr, axis, seed):
+def get_random_slab(nb_elements, arr, axis, seed, random=True, pos=(0, 0)):
     """ Get a random slab which contains nb_elements from array arr at a random position.
     axis: 0 (y-axis) = horizontal slab, 1 (x-axis) or 2 (z-axis) = vertical slab
     """
-    random.seed(seed)
+
     complete_dims = [i for i in range(3) if i != axis] # get the other dimensions
     slab_area = arr.shape[complete_dims[0]] * arr.shape[complete_dims[1]]
     slab_width = math.ceil(nb_elements / slab_area)
-    pos = random.randint(0, arr.shape[axis] - slab_width)
+
+    if random:
+        random.seed(seed)
+        pos = random.randint(0, arr.shape[axis] - slab_width)
 
     if axis == 0:
         return arr[pos: pos + slab_width, :, :]
@@ -108,14 +114,16 @@ def get_random_slab(nb_elements, arr, axis, seed):
         return arr[:, :, pos: pos + slab_width]
 
 
-def get_random_rectangle_blocks(arr, shape, seed):
+def get_random_right_cuboid(arr, shape, seed, random=True, pos=(0, 0, 0)):
     """ Get a random rectangle of shape 'shape' from array arr at a random position.
     shape has to be a tuple containing the width of the rectangle in the three dimensions
     """
-    random.seed(seed)
-    pos = [random.randint(0, arr.shape[i] - shape[i]) for i in range(3)]
+    if random:
+        random.seed(seed)
+        pos = [random.randint(0, arr.shape[i] - shape[i]) for i in range(3)]
+
     return arr[pos[0]:pos[0] + shape[0],
-               pos[1]:pos[1] + shape[0],
+               pos[1]:pos[1] + shape[1],
                pos[2]:pos[2] + shape[2]]
 
 
@@ -128,22 +136,29 @@ def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, r
     -take into account storage type (unique_file or multiple_files) thanks to dask
 
     geometry: name of geometry to use
-    nb_elements: nb elements wanted, not used for rectangle_blocks geometry
-    shape: shape to use for rectangle_blocks
+    nb_elements: nb elements wanted, not used for right_cuboid geometry
+    shape: shape to use for right_cuboid
     axis: support axis for the slab
     random: if random cut or at a precise position. If set to False, upper_corner should be set.
     upper_corner: upper corner of the block/slab to be extracted (position from which to extract in the array).
 
     Returns a numpy array
     """
-    if random:
-        if geometry == "slabs":
-            return get_random_slab(nb_elements, arr, axis, seed)
-        elif geometry == "cubic_blocks":
-            return get_random_cubic_block(nb_elements, arr, seed)
-        elif geometry == "rectangle_blocks":
-            return get_random_rectangle_blocks(arr, shape, seed)
-    return
+    if geometry not in ["slabs", "cubic_blocks", "right_cuboid"]:
+        print("bad geometry type. Aborting.")
+        return
+
+    if geometry == "slabs":
+        if random == False and len(upper_corner) != 2:
+            print("Bad shape for upper corner: must be of dimension 2. Aborting.")
+            return
+        arr = get_random_slab(nb_elements, arr, axis, seed, random, pos=upper_corner)
+    elif geometry == "cubic_blocks":
+        arr = get_random_cubic_block(nb_elements, arr, seed, random, corner_index=upper_corner)
+    elif geometry == "right_cuboid":
+        arr = get_random_right_cuboid(arr, shape, seed, random, pos=upper_corner)
+
+    return arr.compute()
 
 
 # neuroimaging paradigm

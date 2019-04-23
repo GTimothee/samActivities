@@ -29,7 +29,7 @@ def get_mem_usage(cache_usage_only=True):
     return b[2], b[4], b[5], b[7]
 
 # TODO: be sure we don't need to trigger .compute() at the end of load_array_parts
-def bench_load_array_parts_contiguous(nb_elements=500000000, file_path = "tests/data/sample.hdf5"):
+def bench_load_array_parts_contiguous_random(nb_elements=500000000, file_path = "tests/data/sample.hdf5"):
     key = "data"
     arr = get_dask_array_from_hdf5(file_path)
 
@@ -56,6 +56,45 @@ def bench_load_array_parts_contiguous(nb_elements=500000000, file_path = "tests/
     return
 
 
+# TODO: be sure we don't need to trigger .compute() at the end of load_array_parts
+def bench_load_array_parts_contiguous(file_path = "tests/data/sample.hdf5",
+                                      key="/data",
+                                      cuboid_shape=(200, 200, 100),
+                                      slab_shape=(2000, 2000, 1)):
+    """ Using simple contiguous file and shapes instead of number of elements.
+    """
+
+    arr = get_dask_array_from_hdf5(file_path, key=key)
+
+    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+
+    get_mem_usage()
+    t1 = time.time()
+    arr = arr.rechunk(slab_shape)
+    a = load_array_parts(arr, geometry="right_cuboid", shape=slab_shape, random=False)
+    t1 = time.time() - t1
+    get_mem_usage()
+
+    print("time to read slabs: " + str(t1) + "\n")
+
+    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+
+    get_mem_usage()
+    t2 = time.time()
+    arr = arr.rechunk(cuboid_shape)
+    a = load_array_parts(arr, geometry="right_cuboid", shape=cuboid_shape, random=False)
+    t2 = time.time() - t2
+    get_mem_usage()
+
+    print("time to read cuboid blocks: " + str(t2))
+
+    with open("outputs/bench_load_array_parts.txt", "w+") as f:
+        f.write("time to read slabs: " + str(t1) + "\n")
+        f.write("time to read cubic blocks: " + str(t2))
+    return
+
+
+# TODO: succeed at writing a file containing chunks slabs 1000x200x1 or equivalent
 def bench_load_array_parts_chunked(slabs_file_path,
                                    blocks_file_path,
                                    key_slabs_file = "data",
@@ -85,7 +124,7 @@ def bench_load_array_parts_chunked(slabs_file_path,
 
         get_mem_usage()
         t = time.time()
-        a = load_array_parts(arr, geometry="rectangle_blocks", shape=shape, random=False)
+        a = load_array_parts(arr, geometry="right_cuboid", shape=shape, random=False)
         t = time.time() - t
         times.append(t)
         get_mem_usage()
@@ -101,6 +140,7 @@ def bench_load_array_parts_chunked(slabs_file_path,
         f.write("time to read one slab from block file: " + str(times[3]))
     return
 
+# TODO: rechunk failed for slabs 1000x200x1
 def bench_rewrite(in_file_path="tests/data/sample.hdf5",
                   out_file_path="/run/media/user/HDD 1TB/bench_increment.hdf5",
                   function=None,
