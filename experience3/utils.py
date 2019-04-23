@@ -165,6 +165,7 @@ def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, r
     else:
         return arr
 
+
 # neuroimaging paradigm
 def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
                 geometry_shape=(770, 605, 700)):
@@ -203,12 +204,55 @@ def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
 
 
 # neuroimaging paradigm
-def naive_merge(geometry):
+def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_"):
     """ Write multiple files into a big array file.
     """
-    prefix = "split_part_"
-    
-    pass
+    def get_tuple_id(file_name, prefix):
+        """ this function returns the position of the block file in the total array
+        """
+        strings = file_name.replace(prefix, "").split('_')
+        integers = map(lambda s: int(s), strings)
+        return tuple(integers)
+
+    def get_max_dim(keys, dim):
+        """ key = (x, y, z) position of the block file in the total array
+        this function returns the number of blocks in a given dimension
+        """
+        return max([key[dim] for key in keys])
+
+    file_names = {get_tuple_id(f.split('.')[0], prefix) : f for f in os.listdir(work_dir) if os.path.isfile(os.path.join(work_dir, f)) and prefix in f}
+    keys = file_names.keys()
+    i_max, j_max, k_max = (get_max_dim(keys, 0), get_max_dim(keys, 1), get_max_dim(keys, 2))
+
+    data = list()
+    for i in range(i_max + 1):
+        stack_i = list()
+        for j in range(j_max + 1):
+            stack_j = list()
+            for k in range(k_max + 1):
+                file_name = file_names[(i, j, k)]
+                arr_k = get_dask_array_from_hdf5(file_path=os.path.join(work_dir, file_name), cast=True, key='/data')
+                stack_j.append(arr_k)
+            stack_i.append(stack_j)
+        data.append(stack_i)
+
+    arr = da.block(data)
+    print("Output shape: " + str(arr.shape))
+
+    while True:
+        try:
+            save = input("Do you want to proceed to the saving ? (y/n)")
+            if save in ["y", "n"]:
+                break
+        except ValueError:
+            print("Invalid answer.")
+            continue
+
+    if save == "y":
+        print("start saving...")
+        save_arr(arr, "hdf5", work_dir + "merged.hdf5",
+                 key='/data', chunks_shape=None)
+    return
 
 
 # neuroimaging paradigm
