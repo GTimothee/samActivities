@@ -1,2 +1,2 @@
-time to read slabs: 4.074131488800049
-time to read cubic blocks: 2.6755878925323486
+time to read slabs: 1.658346176147461
+time to read cubic blocks: 2.8544352054595947

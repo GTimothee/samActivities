@@ -28,12 +28,14 @@ def get_mem_usage(cache_usage_only=True):
     b = a.split('\n')[2].split()
     return b[2], b[4], b[5], b[7]
 
-# TODO: be sure we don't need to trigger .compute() at the end of load_array_parts
-def bench_load_array_parts_contiguous_random(nb_elements=500000000, file_path = "tests/data/sample.hdf5"):
+
+def bench_load_array_parts_random(nb_elements=500000000, file_path = "tests/data/sample.hdf5"):
+    """ To be used on a contiguous file
+    """
     key = "data"
     arr = get_dask_array_from_hdf5(file_path)
 
-    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
     t1 = time.time()
@@ -41,7 +43,7 @@ def bench_load_array_parts_contiguous_random(nb_elements=500000000, file_path = 
     t1 = time.time() - t1
     get_mem_usage()
 
-    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
     t2 = time.time()
@@ -56,17 +58,16 @@ def bench_load_array_parts_contiguous_random(nb_elements=500000000, file_path = 
     return
 
 
-# TODO: be sure we don't need to trigger .compute() at the end of load_array_parts
-def bench_load_array_parts_contiguous(file_path = "tests/data/sample.hdf5",
+def bench_load_array_parts(file_path = "tests/data/sample.hdf5",
                                       key="/data",
                                       cuboid_shape=(200, 200, 100),
                                       slab_shape=(2000, 2000, 1)):
-    """ Using simple contiguous file and shapes instead of number of elements.
+    """ To be used on a contiguous file, using shapes and rechunk instead of number of elements
     """
 
     arr = get_dask_array_from_hdf5(file_path, key=key)
 
-    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
     t1 = time.time()
@@ -77,7 +78,7 @@ def bench_load_array_parts_contiguous(file_path = "tests/data/sample.hdf5",
 
     print("time to read slabs: " + str(t1) + "\n")
 
-    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
     t2 = time.time()
@@ -120,7 +121,7 @@ def bench_load_array_parts_chunked(slabs_file_path,
     times = list()
     for shape, file_path in zip(shapes, files):
         arr = get_dask_array_from_hdf5(slabs_file_path)
-        # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+        os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
         get_mem_usage()
         t = time.time()
@@ -164,7 +165,7 @@ def bench_rewrite(in_file_path="tests/data/sample.hdf5",
             out_filename = out_filename + "_rechunk"
             info = "time to rewrite with rechunk : "
 
-    # os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
     t1 = time.time()
