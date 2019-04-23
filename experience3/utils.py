@@ -34,7 +34,7 @@ import math
 import random
 
 
-def create_random_cube(storage_type, file_path, shape, axis=0, chunks_shape=None):
+def create_random_cube(storage_type, file_path, shape, axis=0, chunks_shape=None, dtype=None):
     """ Generate random cubic array from normal distribution and store it on disk.
         storage_type: string
         shape: tuple or integer
@@ -43,6 +43,8 @@ def create_random_cube(storage_type, file_path, shape, axis=0, chunks_shape=None
         chunks_shape: for hdf5 only (as far as i am concerned for the moment)
     """
     arr = da.random.normal(size=shape)
+    if dtype:
+        arr = arr.astype(dtype)
     save_arr(arr, storage_type, file_path, key='/data', axis=axis, chunks_shape=chunks_shape)
     return
 
@@ -128,9 +130,9 @@ def get_random_right_cuboid(arr, shape, seed, random=True, pos=(0, 0, 0)):
 
 
 # dask paradigm
-def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, random=True, seed=0, upper_corner=(0,0,0)):
+def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, random=True, seed=0, upper_corner=(0,0,0), as_numpy=False):
     """ Load part of array.
-    Load 1 or more parts of a too-big-for-memory array from file into memory.
+    Load 1 (or more parts -> one for the moment) of a too-big-for-memory array from file into memory.
     -given 1 or more parts (not necessarily close to each other)
     -take into account geometry
     -take into account storage type (unique_file or multiple_files) thanks to dask
@@ -158,22 +160,54 @@ def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, r
     elif geometry == "right_cuboid":
         arr = get_random_right_cuboid(arr, shape, seed, random, pos=upper_corner)
 
-    return arr.compute()
-
+    if as_numpy:
+        return arr.compute()
+    else:
+        return arr
 
 # neuroimaging paradigm
-def naive_split(geometry):
+def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
+                geometry_shape=(770, 605, 700)):
     """
     Given a big file, split it into several files, following a given geometry.
     <=> naive split algorithm
     """
-    pass
+    arr = get_dask_array_from_hdf5(file_path=input_file_path, cast=True, key='/data')
+    arr_shape = arr.shape
+    for a, g in zip(arr_shape, geometry_shape):
+        if a % g != 0:
+            print(str(a) + " % " + str(g) + " = " + str(a % g))
+            print("Bad geometry shape, the array cannot be divided by this shape. Aborting.")
+            return
+
+    workdir = "/run/media/user/HDD 1TB/"
+    for i in range(int(arr_shape[0]/geometry_shape[0])):
+        for j in range(int(arr_shape[1]/geometry_shape[1])):
+            for k in range(int(arr_shape[2]/geometry_shape[2])):
+                file_name = "split_part_{0}_{1}_{2}.hdf5".format(i, j, k)
+
+                print("extracting " + file_name + "...")
+                pos = (i * geometry_shape[0],
+                       j * geometry_shape[1],
+                       k * geometry_shape[2])
+                split = load_array_parts(arr,
+                                         geometry="right_cuboid",
+                                         shape=geometry_shape,
+                                         random=False,
+                                         upper_corner=pos)
+
+                print("saving " + file_name + "...")
+                file_path = workdir + file_name
+                save_arr(split, "hdf5", file_path, key='/data', chunks_shape=None)
+    return
 
 
 # neuroimaging paradigm
 def naive_merge(geometry):
     """ Write multiple files into a big array file.
     """
+    prefix = "split_part_"
+    
     pass
 
 

@@ -39,7 +39,7 @@ def bench_load_array_parts_random(nb_elements=500000000, file_path = "tests/data
 
     get_mem_usage()
     t1 = time.time()
-    a = load_array_parts(arr, geometry="cubic_blocks", nb_elements=nb_elements)
+    a = load_array_parts(arr, geometry="cubic_blocks", nb_elements=nb_elements, as_numpy=True)
     t1 = time.time() - t1
     get_mem_usage()
 
@@ -47,7 +47,7 @@ def bench_load_array_parts_random(nb_elements=500000000, file_path = "tests/data
 
     get_mem_usage()
     t2 = time.time()
-    a = load_array_parts(arr, geometry="slabs", nb_elements=nb_elements)
+    a = load_array_parts(arr, geometry="slabs", nb_elements=nb_elements, as_numpy=True)
     t2 = time.time() - t2
     get_mem_usage()
 
@@ -72,7 +72,7 @@ def bench_load_array_parts(file_path = "tests/data/sample.hdf5",
     get_mem_usage()
     t1 = time.time()
     arr = arr.rechunk(slab_shape)
-    a = load_array_parts(arr, geometry="right_cuboid", shape=slab_shape, random=False)
+    a = load_array_parts(arr, geometry="right_cuboid", shape=slab_shape, random=False, as_numpy=True)
     t1 = time.time() - t1
     get_mem_usage()
 
@@ -83,7 +83,7 @@ def bench_load_array_parts(file_path = "tests/data/sample.hdf5",
     get_mem_usage()
     t2 = time.time()
     arr = arr.rechunk(cuboid_shape)
-    a = load_array_parts(arr, geometry="right_cuboid", shape=cuboid_shape, random=False)
+    a = load_array_parts(arr, geometry="right_cuboid", shape=cuboid_shape, random=False, as_numpy=True)
     t2 = time.time() - t2
     get_mem_usage()
 
