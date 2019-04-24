@@ -170,7 +170,7 @@ def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, r
 def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
                 geometry_shape=(770, 605, 700),
                 rechunk=False,
-                workdir="/run/media/user/HDD 1TB/",
+                work_dir="/run/media/user/HDD 1TB/",
                 unmatch_dims=False):
     """
     Given a big file, split it into several files, following a given geometry.
@@ -183,19 +183,17 @@ def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
     if rechunk:
         arr = arr.rechunk((geometry_shape[0], geometry_shape[1], "auto"))
 
+    arr_shape = arr.shape
     if not unmatch_dims:
-        arr_shape = arr.shape
         for a, g in zip(arr_shape, geometry_shape):
             if a % g != 0:
                 print(str(a) + " % " + str(g) + " = " + str(a % g))
                 print("Bad geometry shape, the array cannot be divided by this shape. Aborting.")
                 return
-
-    a = [int(arr_shape[0]/geometry_shape[0]),
-         int(arr_shape[1]/geometry_shape[1]),
-         int(arr_shape[2]/geometry_shape[2])]
-         
-    if unmatch_dims:
+        a = [int(arr_shape[0]/geometry_shape[0]),
+             int(arr_shape[1]/geometry_shape[1]),
+             int(arr_shape[2]/geometry_shape[2])]
+    else:
         a = [math.floor(arr_shape[0]/geometry_shape[0]),
              math.floor(arr_shape[1]/geometry_shape[1]),
              math.floor(arr_shape[2]/geometry_shape[2])]
@@ -217,7 +215,7 @@ def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
                                          upper_corner=pos)
 
                 print("saving " + file_name + "...")
-                file_path = workdir + file_name
+                file_path = work_dir + file_name
                 write_time = time.time()
                 save_arr(split, "hdf5", file_path, key='/data', chunks_shape=None)
                 write_time = time.time() - write_time
@@ -259,7 +257,7 @@ def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_", ask=F
                 file_name = file_names[(i, j, k)]
                 arr_k = get_dask_array_from_hdf5(file_path=os.path.join(work_dir, file_name), cast=True, key='/data')
                 if rechunk:
-                    arr = arr.rechunk((arr_k.shape[0], arr_k.shape[1], "auto"))
+                    arr_k = arr_k.rechunk((arr_k.shape[0], arr_k.shape[1], "auto"))
                 stack_j.append(arr_k)
             stack_i.append(stack_j)
         data.append(stack_i)

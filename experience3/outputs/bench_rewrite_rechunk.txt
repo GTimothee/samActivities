@@ -1,1 +1,1 @@
-time to rewrite with rechunk : 1.0649406909942627seconds 
+time to rewrite with rechunk : 148.0032811164856seconds 
