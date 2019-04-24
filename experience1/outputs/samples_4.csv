@@ -1,0 +1,2 @@
+sample,hardware_type,file_system,strategy,split_time,merge_time,split_nb_seeks,merge_nb_seeks,split_read_time,merge_read_time,split_write_time,merge_write_time,split_seek_time,merge_seek_time
+bigBrainSample0-0-1.nii,ssd,ext4,Strategy.CLUSTERED,33.34217381477356,32.42713403701782,2824,3388009,19.666423082351685,16.028642892837524,2.1265578269958496,10.079730749130249,0,0
