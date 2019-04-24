@@ -168,23 +168,42 @@ def load_array_parts(arr, geometry="slabs", nb_elements=0, shape=None, axis=0, r
 
 # neuroimaging paradigm
 def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
-                geometry_shape=(770, 605, 700)):
+                geometry_shape=(770, 605, 700),
+                rechunk=False,
+                workdir="/run/media/user/HDD 1TB/",
+                unmatch_dims=False):
     """
     Given a big file, split it into several files, following a given geometry.
     <=> naive split algorithm
-    """
-    arr = get_dask_array_from_hdf5(file_path=input_file_path, cast=True, key='/data')
-    arr_shape = arr.shape
-    for a, g in zip(arr_shape, geometry_shape):
-        if a % g != 0:
-            print(str(a) + " % " + str(g) + " = " + str(a % g))
-            print("Bad geometry shape, the array cannot be divided by this shape. Aborting.")
-            return
 
-    workdir = "/run/media/user/HDD 1TB/"
-    for i in range(int(arr_shape[0]/geometry_shape[0])):
-        for j in range(int(arr_shape[1]/geometry_shape[1])):
-            for k in range(int(arr_shape[2]/geometry_shape[2])):
+    unmatch_dims: set to true if you don't care of the mismatch of the geometry shape regarding the array shape
+    """
+    total_time = time.time()
+    arr = get_dask_array_from_hdf5(file_path=input_file_path, cast=True, key='/data')
+    if rechunk:
+        arr = arr.rechunk((geometry_shape[0], geometry_shape[1], "auto"))
+
+    if not unmatch_dims:
+        arr_shape = arr.shape
+        for a, g in zip(arr_shape, geometry_shape):
+            if a % g != 0:
+                print(str(a) + " % " + str(g) + " = " + str(a % g))
+                print("Bad geometry shape, the array cannot be divided by this shape. Aborting.")
+                return
+
+    a = [int(arr_shape[0]/geometry_shape[0]),
+         int(arr_shape[1]/geometry_shape[1]),
+         int(arr_shape[2]/geometry_shape[2])]
+         
+    if unmatch_dims:
+        a = [math.floor(arr_shape[0]/geometry_shape[0]),
+             math.floor(arr_shape[1]/geometry_shape[1]),
+             math.floor(arr_shape[2]/geometry_shape[2])]
+
+    IO_time = 0
+    for i in range(a[0]):
+        for j in range(a[1]):
+            for k in range(a[2]):
                 file_name = "split_part_{0}_{1}_{2}.hdf5".format(i, j, k)
 
                 print("extracting " + file_name + "...")
@@ -199,12 +218,17 @@ def naive_split(input_file_path="/run/media/user/HDD 1TB/bbsamplesize.hdf5",
 
                 print("saving " + file_name + "...")
                 file_path = workdir + file_name
+                write_time = time.time()
                 save_arr(split, "hdf5", file_path, key='/data', chunks_shape=None)
-    return
+                write_time = time.time() - write_time
+                IO_time += write_time
+
+    total_time = time.time() - total_time
+    return total_time, IO_time
 
 
 # neuroimaging paradigm
-def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_"):
+def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_", ask=False, rechunk=False):
     """ Write multiple files into a big array file.
     """
     def get_tuple_id(file_name, prefix):
@@ -220,6 +244,8 @@ def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_"):
         """
         return max([key[dim] for key in keys])
 
+    total_time = time.time()
+
     file_names = {get_tuple_id(f.split('.')[0], prefix) : f for f in os.listdir(work_dir) if os.path.isfile(os.path.join(work_dir, f)) and prefix in f}
     keys = file_names.keys()
     i_max, j_max, k_max = (get_max_dim(keys, 0), get_max_dim(keys, 1), get_max_dim(keys, 2))
@@ -232,6 +258,8 @@ def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_"):
             for k in range(k_max + 1):
                 file_name = file_names[(i, j, k)]
                 arr_k = get_dask_array_from_hdf5(file_path=os.path.join(work_dir, file_name), cast=True, key='/data')
+                if rechunk:
+                    arr = arr.rechunk((arr_k.shape[0], arr_k.shape[1], "auto"))
                 stack_j.append(arr_k)
             stack_i.append(stack_j)
         data.append(stack_i)
@@ -239,20 +267,27 @@ def naive_merge(work_dir="/run/media/user/HDD 1TB/", prefix="split_part_"):
     arr = da.block(data)
     print("Output shape: " + str(arr.shape))
 
-    while True:
-        try:
-            save = input("Do you want to proceed to the saving ? (y/n)")
-            if save in ["y", "n"]:
-                break
-        except ValueError:
-            print("Invalid answer.")
-            continue
+    if ask:
+        while True:
+            try:
+                save = input("Do you want to proceed to the saving ? (y/n)")
+                if save in ["y", "n"]:
+                    break
+            except ValueError:
+                print("Invalid answer.")
+                continue
+    else:
+        save = "y"
 
     if save == "y":
         print("start saving...")
+        IO_time = time.time()
         save_arr(arr, "hdf5", work_dir + "merged.hdf5",
                  key='/data', chunks_shape=None)
-    return
+        IO_time = time.time() - IO_time
+
+    total_time = time.time() - total_time
+    return total_time, IO_time
 
 
 # neuroimaging paradigm

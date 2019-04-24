@@ -1,6 +1,6 @@
 from utils import get_dask_array_from_hdf5, load_array_parts, save_arr
 import dask.array as da
-import time, os, h5py, subprocess
+import time, os, h5py, subprocess, shutil
 
 """
 have been created:
@@ -15,6 +15,7 @@ bench_rewrite(in_file_path="tests/data/sample.hdf5",
                   function="rechunk",
                   chunks_shape=(1000, 1000, 1))
 """
+
 
 def get_mem_usage(cache_usage_only=True):
     '''
@@ -61,7 +62,8 @@ def bench_load_array_parts_random(nb_elements=500000000, file_path = "tests/data
 def bench_load_array_parts(file_path = "tests/data/sample.hdf5",
                                       key="/data",
                                       cuboid_shape=(200, 200, 100),
-                                      slab_shape=(2000, 2000, 1)):
+                                      slab_shape=(2000, 2000, 1),
+                                      rechunk=True):
     """ To be used on a contiguous file, using shapes and rechunk instead of number of elements
     """
 
@@ -70,8 +72,9 @@ def bench_load_array_parts(file_path = "tests/data/sample.hdf5",
     os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
+    if rechunk:
+        arr = arr.rechunk(slab_shape)
     t1 = time.time()
-    arr = arr.rechunk(slab_shape)
     a = load_array_parts(arr, geometry="right_cuboid", shape=slab_shape, random=False, as_numpy=True)
     t1 = time.time() - t1
     get_mem_usage()
@@ -81,8 +84,9 @@ def bench_load_array_parts(file_path = "tests/data/sample.hdf5",
     os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
 
     get_mem_usage()
+    if rechunk:
+        arr = arr.rechunk(cuboid_shape)
     t2 = time.time()
-    arr = arr.rechunk(cuboid_shape)
     a = load_array_parts(arr, geometry="right_cuboid", shape=cuboid_shape, random=False, as_numpy=True)
     t2 = time.time() - t2
     get_mem_usage()
@@ -179,3 +183,87 @@ def bench_rewrite(in_file_path="tests/data/sample.hdf5",
     with open("outputs/" + out_filename + ".txt", "w+") as f:
         f.write(info + str(t1) + "seconds \n")
     return
+
+
+def on_hdd_on_ssd(ssd=True, hdd=False):
+    if ssd:
+        hardware_type = "SSD"
+        work_dir = "path/to/ssd"
+        input_file_path = work_dir + "bbsamplesize.hdf5"
+        bench_split_and_merge(hardware_type, work_dir, input_file_path)
+
+    if hdd:
+        hardware_type = "HDD"
+        work_dir = "path/to/hdd"
+        input_file_path = work_dir + "bbsamplesize.hdf5"
+        bench_split_and_merge(hardware_type, work_dir, input_file_path)
+
+    return
+
+
+def bench_split_and_merge():
+    """
+    selecting slab shape:
+    -------------------------------
+    - nb total delements: 326 095 000
+    - nb delements dans un slice de hauteur 1: 1540 x 1210 x 1 = 1 863 400
+    - 326 095 000 / (1540 x 1210) = 175 slices
+    - 175 slices / 6 splits = 29,... (slab width)
+    - resulting shape of a slab: 1540 x 1210 x 29 (result will not be exact but still comparable -> unmatch_dims=True)
+
+    logic_chunk_shape: the first two dimensions are used and the last is set to 'auto'
+    """
+
+    csv_file_path = "output.csv"
+    block_shape = (770, 605, 700)
+    slab_shape = (1540, 1210, 29)
+    prefix = "split_part_"
+    rechunk = False
+
+    with open("output.csv", "a+") as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerow(["hardware_type", "geometry", "shape", "flush_cache",
+                         "hardware_chunk_shape", "logic_chunk_shape",
+                         "split_total_time", "split_IO_time",
+                         "merge_total_time", "merge_IO_time"])
+
+        # block with or without flushing cache
+        stats = run_split_and_merge(True, block_shape, input_file_path, work_dir, prefix, rechunk, False)
+        writer.writerow([hardware_type, "block", block_shape, True, None, None] + list(stats))
+        stats = run_split_and_merge(False, block_shape, input_file_path, work_dir, prefix, rechunk, False)
+        writer.writerow([hardware_type, "block", block_shape, False, None, None] + list(stats))
+
+        # block with rechunk without flushing cache
+        stats = run_split_and_merge(False, block_shape, input_file_path, work_dir, prefix, rechunk=True, False)
+        writer.writerow([hardware_type, "block", block_shape, False, None, block_shape] + list(stats))
+
+        # slab without flushing cache
+        stats = run_split_and_merge(False, slab_shape, input_file_path, work_dir, prefix, rechunk, True)
+        writer.writerow([hardware_type, "slab", slab_shape, False, None, None] + list(stats))
+
+        # slab with rechunk without flushing cache
+        stats = run_split_and_merge(False, slab_shape, input_file_path, work_dir, prefix, rechunk=True, True)
+        writer.writerow([hardware_type, "slab", slab_shape, False, None, slab_shape] + list(stats))
+
+        # create a rechunked file for block and run block split_and_merge on it
+        bench_rewrite(in_file_path=input_file_path,
+                      out_file_path=block_chunked_file_path,
+                      function="rechunk",
+                      chunks_shape=block_shape)
+        stats = run_split_and_merge(False, block_shape, block_chunked_file_path, work_dir, prefix, rechunk)
+        writer.writerow([hardware_type, "block", block_shape, False, block_shape, None] + list(stats))
+    return
+
+def run_split_and_merge(flush_cache=False, geometry_shape, input_file_path, work_dir, prefix, rechunk, unmatch_dims):
+    """ flush_cache only control cache flush BETWEEN both algrithms
+    """
+    os.mkdir(work_dir + "tmp", 0755);
+    os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    print("begin the splitting process")
+    split_total_time, split_IO_time = naive_split(input_file_path=input_file_path, geometry_shape=geometry_shape, rechunk=rechunk, work_dir=work_dir + "tmp", unmatch_dims=unmatch_dims)
+    if flush_cache:
+        os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
+    print("begin the merging process")
+    merge_total_time, merge_IO_time = naive_merge(work_dir=work_dir + "tmp", prefix=prefix, ask=False, rechunk=rechunk)
+    shutil.rmtree(work_dir + "tmp")
+    return (split_total_time, split_IO_time, merge_total_time, merge_IO_time)
