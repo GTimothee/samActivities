@@ -14,6 +14,17 @@ bench_rewrite(in_file_path="tests/data/sample.hdf5",
                   out_file_path="/run/media/user/HDD 1TB/chunked_slabs_1000_200.hdf5",
                   function="rechunk",
                   chunks_shape=(1000, 1000, 1))
+
+# remainder to create the cube
+from utils import create_random_cube
+import dask.array as da
+import h5py
+import time
+create_random_cube(storage_type="hdf5",
+                   file_path="tests/data/bbsamplesize.hdf5",
+                   shape=(1540,1210,1400),
+                   chunks_shape=None,
+                   dtype="float16")
 """
 
 
@@ -188,7 +199,7 @@ def bench_rewrite(in_file_path="tests/data/sample.hdf5",
 def on_hdd_on_ssd(ssd=True, hdd=False):
     if ssd:
         hardware_type = "SSD"
-        work_dir = "path/to/ssd"
+        work_dir = "tests/data/"
         input_file_path = work_dir + "bbsamplesize.hdf5"
         bench_split_and_merge(hardware_type, work_dir, input_file_path)
 
@@ -197,7 +208,6 @@ def on_hdd_on_ssd(ssd=True, hdd=False):
         work_dir = "path/to/hdd"
         input_file_path = work_dir + "bbsamplesize.hdf5"
         bench_split_and_merge(hardware_type, work_dir, input_file_path)
-
     return
 
 
@@ -220,7 +230,7 @@ def bench_split_and_merge():
     prefix = "split_part_"
     rechunk = False
 
-    with open("output.csv", "a+") as csvFile:
+    with open("outputs/output.csv", "a+") as csvFile:
         writer = csv.writer(csvFile)
         writer.writerow(["hardware_type", "geometry", "shape", "flush_cache",
                          "hardware_chunk_shape", "logic_chunk_shape",
@@ -228,21 +238,21 @@ def bench_split_and_merge():
                          "merge_total_time", "merge_IO_time"])
 
         # block with or without flushing cache
-        stats = run_split_and_merge(True, block_shape, input_file_path, work_dir, prefix, rechunk, False)
+        stats = run_split_and_merge(block_shape, input_file_path, work_dir, prefix, rechunk, unmatch_dims=False, flush_cache=True)
         writer.writerow([hardware_type, "block", block_shape, True, None, None] + list(stats))
-        stats = run_split_and_merge(False, block_shape, input_file_path, work_dir, prefix, rechunk, False)
+        stats = run_split_and_merge(block_shape, input_file_path, work_dir, prefix, rechunk, unmatch_dims=False, flush_cache=False)
         writer.writerow([hardware_type, "block", block_shape, False, None, None] + list(stats))
 
         # block with rechunk without flushing cache
-        stats = run_split_and_merge(False, block_shape, input_file_path, work_dir, prefix, rechunk=True, False)
+        stats = run_split_and_merge(block_shape, input_file_path, work_dir, prefix, rechunk=True, unmatch_dims=False, flush_cache=False)
         writer.writerow([hardware_type, "block", block_shape, False, None, block_shape] + list(stats))
 
         # slab without flushing cache
-        stats = run_split_and_merge(False, slab_shape, input_file_path, work_dir, prefix, rechunk, True)
+        stats = run_split_and_merge(slab_shape, input_file_path, work_dir, prefix, rechunk, unmatch_dims=True, flush_cache=False)
         writer.writerow([hardware_type, "slab", slab_shape, False, None, None] + list(stats))
 
         # slab with rechunk without flushing cache
-        stats = run_split_and_merge(False, slab_shape, input_file_path, work_dir, prefix, rechunk=True, True)
+        stats = run_split_and_merge(slab_shape, input_file_path, work_dir, prefix, rechunk=True, unmatch_dims=True, flush_cache=False)
         writer.writerow([hardware_type, "slab", slab_shape, False, None, slab_shape] + list(stats))
 
         # create a rechunked file for block and run block split_and_merge on it
@@ -250,14 +260,14 @@ def bench_split_and_merge():
                       out_file_path=block_chunked_file_path,
                       function="rechunk",
                       chunks_shape=block_shape)
-        stats = run_split_and_merge(False, block_shape, block_chunked_file_path, work_dir, prefix, rechunk)
+        stats = run_split_and_merge(block_shape, block_chunked_file_path, work_dir, prefix, rechunk, unmatch_dims=False, flush_cache=False)
         writer.writerow([hardware_type, "block", block_shape, False, block_shape, None] + list(stats))
     return
 
-def run_split_and_merge(flush_cache=False, geometry_shape, input_file_path, work_dir, prefix, rechunk, unmatch_dims):
+def run_split_and_merge(geometry_shape, input_file_path, work_dir, prefix, rechunk, unmatch_dims, flush_cache=False):
     """ flush_cache only control cache flush BETWEEN both algrithms
     """
-    os.mkdir(work_dir + "tmp", 0755);
+    os.mkdir(work_dir + "tmp")
     os.system('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches')
     print("begin the splitting process")
     split_total_time, split_IO_time = naive_split(input_file_path=input_file_path, geometry_shape=geometry_shape, rechunk=rechunk, work_dir=work_dir + "tmp", unmatch_dims=unmatch_dims)
