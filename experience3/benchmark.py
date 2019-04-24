@@ -215,15 +215,15 @@ def bench_split_and_merge(hardware_type, work_dir, input_file_path, block_chunke
     - nb total delements: 326 095 000
     - nb delements dans un slice de hauteur 1: 1540 x 1210 x 1 = 1 863 400
     - 326 095 000 / (1540 x 1210) = 175 slices
-    - 175 slices / 6 splits = 29,... (slab width)
-    - resulting shape of a slab: 1540 x 1210 x 29 (result will not be exact but still comparable -> unmatch_dims=True)
+    - 175 slices / 8 splits = 21,... (slab width)
+    - resulting shape of a slab: 1540 x 1210 x 21 (result will not be exact but still comparable -> unmatch_dims=True)
 
     logic_chunk_shape: the first two dimensions are used and the last is set to 'auto'
     """
 
     csv_file_name = datetime.datetime.now().strftime("%d-%m-%Y_%Ih%M%p.csv")
     block_shape = (770, 605, 700)
-    slab_shape = (1540, 1210, 29)
+    slab_shape = (1540, 1210, 21)
     prefix = "split_part_"
     rechunk = False
 
