@@ -6,13 +6,8 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-dask = {extras = ["complete"],version = "*"}
-ipykernel = "*"
-h5py = "*"
-pytest = "*"
-pandas = "*"
-matplotlib = "*"
-graphviz = "*"
+dask = "*"
+numpy = "*"
 
 [requires]
 python_version = "3.7"
