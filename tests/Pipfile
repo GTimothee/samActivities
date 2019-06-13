@@ -8,6 +8,8 @@ verify_ssl = true
 [packages]
 dask = "*"
 numpy = "*"
+toolz = "*"
+h5py = "*"
 
 [requires]
 python_version = "3.7"
