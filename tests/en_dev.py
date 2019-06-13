@@ -1,109 +1,104 @@
 
 import sys
 
-def get_rechunk_keys_lists_from_dask_array(graph, printer=False):
+
+def add_or_create_to_list_dict(d, k, v):
+    if k not in list(d.keys()):
+        d[k] = [v]
+    else:
+        d[k].append(v)
+    return d
+
+
+def get_keys_from_graph(graph, printer=False):
+    key_dict = dict()
+    for k, v in graph.items():
+        split = k.split('-')
+        key_name = split[:len(split)]
+        add_or_create_to_list_dict(key_dict, key_name, k)
+    return key_dict
+
+
+def get_rechunk_subkeys(rechunk_graph):
+    keys_dict = get_keys_from_graph(rechunk_graph, printer=False)
+    return keys_dict['rechunk-split'], keys_dict['rechunk-merge']
+
+
+def test_source_key(slices_dict, source_key):
+    """ test if source is an array proxy: if yes, add source key data to slices_dict
     """
-    (k, rechunk_merge_key) : k is the key inside the merge graph, rechunk_merge_key is the key of the merge graph in the whole graph
-    """
-    def get_rechunkkeys_and_proxyarraykeys_from_dask_graph():
-        proxy_array_keys = list()
-        rechunk_merge_keys = list()
-        for key in keys:
-            if "array" in key:
-                proxy_array_keys.append(key)
-            elif "rechunk-merge" in key:
-                rechunk_merge_keys.append(key)
-            else:
-                others.append(key)
-        return proxy_array_keys, rechunk_merge_keys
-
-    keys = list(graph.keys())
-    others = list()
+        if len(source_key) != 4:
+            raise ValueError("not enough elements to unpack in", source_key)
+        source, s1, s2, s3 = source_key
+        if not isinstance(source, str):
+            raise ValueError("expected a string:", source)
+        if 'array' in source:
+            add_or_create_to_list_dict(slices_dict, source, (s1, s2, s3))
+        return slices_dict
 
 
-    proxy_array_keys, rechunk_merge_keys = get_rechunkkeys_and_proxyarraykeys_from_dask_graph()
-    if len(rechunk_merge_keys) == 0:
-        raise ValueError("no rechunk in this graph")
+def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys):
 
-    rechunk_keys = list()
-    for key in rechunk_merge_keys:
-        rechunk_graph = graph[key]
-        for k in list(rechunk_graph.keys()):
-            if "rechunk-split" in k[0]:
-                rechunk_keys.append((k, key))
-
-    if printer:
-        print(rechunk_keys)
-        print(proxy_array_keys)
-        print(others)
-    return rechunk_keys, rechunk_graph, proxy_array_keys, others
-
-
-def get_slices_from_rechunk_dict(rechunk_merge_graph):
-    """
-    -assumes that the rechunk merge dict only take data from a same proxy array
-    """
-    def get_slices_from_splits(rechunk_splits):
-        target_name = None
-        slices_list = list()
-        for split_key in rechunk_splits:
+    def get_slices_from_splits(split_keys):
+        for split_key in split_keys:
             split_value = rechunk_merge_graph[split_key]
-            _, array_vals, slices = split_value
-            source, s1, s2, s3 = array_vals
-            if 'array' in source:
-                if not target_name:
-                    target_name = source
-                slices_list.append((s1, s2, s3))
-        return target_name, slices_list
+            _, source_key, slices = split_value
+            slices_dict = test_source_key(slices_dict, source_key)
+        return slices_dict
 
-    def get_keys_by_type():
+    # TODO: make better
+    def get_slices_from_merges(merge_keys):
+        for merge_key in merge_keys:
+            merge_value = rechunk_merge_graph[merge_key]
+            _, concat_list = merge_value
+            while not isinstance(l[0][0], tuple):
+                l = l[0]
+            for block in l:
+                for source_key in block:
+                    slices_dict = test_source_key(slices_dict, source_key)
+        return slices_dict
 
-        rechunk_merges = list()
-        rechunk_splits = list()
-        for key in list(rechunk_merge_graph.keys()):
-            if 'rechunk-merge' in key[0]:
-                rechunk_merges.append(key)
-            elif 'rechunk-split' in key[0]:
-                rechunk_splits.append(key)
-        return rechunk_merges, rechunk_splits
-
-    rechunk_merges, rechunk_splits = get_keys_by_type()
-    target_name, slices_list = get_slices_from_splits(rechunk_splits)
-
-    """
-    print("target_name", target_name)"""
-    """for merge_key in rechunk_merges:
-        merge_value = rechunk_merge_graph[merge_key]
-        _, concat_list = merge_value
-        l = concat_list
-        while not isinstance(l[0][0], tuple):
-            l = l[0]
-        for block in l:
-            for tupl in block:
-                print(tupl)
-                if 'array' in tupl[0]:
-                    target_name, s1, s2, s3 = tupl
-                    slices_list.append((s1, s2, s3))"""
-
-    return target_name, slices_list
+    slices_dict = dict()
+    slices_dict = get_slices_from_splits(rechunk_splits, slices_dict)
+    slices_dict = get_slices_from_merges(rechunk_merges, slices_dict)
+    return slices_dict
 
 
-def get_getitem_keys_lists_from_dask_array(graph, printer=False):
-    keys = list(graph.keys())
-    getitem_keys = list()
-    proxy_array_keys = list()
-    actions = list()
+def get_slices_from_rechunk_keys(graph, rechunk_keys):
+    global_slices_dict = dict()
+    for rechunk_key in rechunk_keys:
+        rechunk_graph = graph[rechunk_key]
+        split_keys, merge_keys = get_rechunk_subkeys(rechunk_graph)
+        local_slices_dict = get_slices_from_rechunk_subkeys(rechunk_graph, split_keys, merge_keys)
+        global_slices_dict.update(local_slices_dict)
+    return global_slices_dict
 
-    for k in keys:
-        if "array" in k:
-            proxy_array_keys.append(k)
-        elif "getitem" in k:
-            getitem_keys.append(k)
-        else:
-            actions.append(k)
 
-    if printer:
-        print(getitem_keys)
-        print(proxy_array_keys)
-        print(actions)
-    return getitem_keys, proxy_array_keys, actions
+def get_slices_from_getitem_subkeys(getitem_graph):
+    slices_dict = dict()
+    for k, v in getitem_graph:
+        f, a, s = v 
+        source, s1, s2, s3 = a
+        test_source_key(slices_dict, source_key)
+    return slices_dict
+
+
+def get_slices_from_getitem_keys(graph, getitem_keys):
+    global_slices_dict = dict()
+    for getitem_key in getitem_keys:
+        getitem_graph = graph[getitem_key]
+        local_slices_dict = get_slices_from_getitem_subkeys(getitem_graph)
+        global_slices_dict.update(local_slices_dict)
+    return global_slices_dict
+
+
+# TODO generalize it to a graph/tree search
+def get_slices_from_dask_graph(graph):
+    keys_dict = get_keys_from_graph(graph)
+    
+    rechunk_keys = keys_dict['rechunk-merge']
+    getitem_keys = keys_dict['getitem']
+
+    slices_dict = get_slices_from_rechunk_keys(graph, rechunk_keys)
+    slices_dict.update(get_slices_from_getitem_keys(graph, getitem_keys))
+    return slices_dict
