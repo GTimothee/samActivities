@@ -14,6 +14,9 @@ from tests_utils import *
 from en_dev import *
 
 
+# TODO: verify deps_dict for all tests
+
+
 def test_add_or_create_to_list_dict():
     d = {'a': [1], 'c': [5, 6]}
     d = add_or_create_to_list_dict(d, 'b', 2)
@@ -25,7 +28,7 @@ def test_add_or_create_to_list_dict():
         print("error")
         print(d, "VS", expected)
         return
-    print("it works")
+    print("success")
 
 
 def test_get_keys_from_graph():
@@ -39,10 +42,10 @@ def test_get_keys_from_graph():
                 'c': ['c-864535']}
     
     if not expected == keys_dict:
-        print("error")
+        print("error in", sys._getframe().f_code.co_name)
         print(expected, "VS", keys_dict)
         return 
-    print("it works")
+    print("success")
 
 
 def test_get_rechunk_subkeys():
@@ -72,55 +75,67 @@ def test_get_rechunk_subkeys():
             print(i)
             print(j, '\n')
             return
-    print("it works")
+    print("success")
 
 
 def test_test_source_key():
     slices_dict = dict()
+    deps_dict = dict()
     sample_source_key = ['array-645318645', 
                          slice(None, None, None), 
                          slice(None, None, None), 
                          slice(None, None, None)]
     has_failed = [False, False]
     expected = {'array-645318645': [(sample_source_key[1], sample_source_key[2], sample_source_key[3])]}
-    slices_dict = test_source_key(slices_dict, tuple(sample_source_key))
+    dep_key = 'sample_dependent_key'
+    expected_deps = {'array-645318645': [dep_key]}
+    slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, tuple(sample_source_key), dep_key)
     sample_source_key[0] = "tmp"
     try:
-        result = test_source_key(slices_dict, tuple(sample_source_key))
+        result, _ = test_source_key(dict(), dict(), tuple(sample_source_key), dep_key)
     except:
         has_failed[0] = True
     sample_source_key[0] = (864513, 86513, 4651, 3465)
     try:
-        result = test_source_key(slices_dict, tuple(sample_source_key))
+        result, _ = test_source_key(dict(), dict(), tuple(sample_source_key), dep_key)
     except:
         has_failed[1] = True
     
     if has_failed != [False, True]:
-        print("error in failure management")
+        print("error in", sys._getframe().f_code.co_name, "(failure management)")
+        print(has_failed)
         return
 
     for i, j in zip(expected, slices_dict):
         if i != j:
-            print("error")
+            print("error in", sys._getframe().f_code.co_name)
             print(i)
             print(j, '\n')
             return
-    print("it works")
+
+    for k, v in expected_deps.items():
+        if tuple(v) != tuple(deps_dict[k]):
+            print("error in", sys._getframe().f_code.co_name)
+            print(k)
+            print(tuple(v))
+            print(tuple(deps_dict[k]), '\n')
+            return
+    print("success")
 
     
 def test_get_slices_from_rechunk_subkeys():
     rechunk_merge_graph = get_rechunk_dict_from_proxy_array_sample()
     split_keys, merge_keys = get_rechunk_subkeys(rechunk_merge_graph)
-    slices_dict = get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
+    slices_dict, deps_dict = get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
     expected_name = 'array-3ec4eddf5e385f67eb8007734372b503'
     expected_list = [(0,0,1),(0,0,2),(0,1,0),(0,1,1),(0,1,2),(0,0,3),(0,1,3),(0,2,0),(0,2,1),(0,2,2)]
     expected = {expected_name: expected_list}
     if not set(slices_dict) == set(expected):
-        print("error")
+        print("error in", sys._getframe().f_code.co_name)
         print(slices_dict)
         print(expected)
         return 
-    print("it works")
+    print("success")
 
 
 def test_get_slices_from_rechunk_keys():
@@ -134,7 +149,7 @@ def test_get_slices_from_rechunk_keys():
 
     rechunk_keys = list(d.keys())
 
-    slices_dict = get_slices_from_rechunk_keys(d, rechunk_keys)
+    slices_dict, deps_dict = get_slices_from_rechunk_keys(d, rechunk_keys)
     expected = dict()
     expected[names[0]] = [(0,0,3),(0,1,3)]
     expected[names[1]] = [(0,2,0)]
@@ -143,35 +158,57 @@ def test_get_slices_from_rechunk_keys():
     
     for k in list(expected.keys()):
         if set(expected[k]) != set(slices_dict[k]):
-            print("error at", k)
+            print("error in", sys._getframe().f_code.co_name, "at", k)
             print(slices_dict)
             print(expected)
             return 
-    print("it works")
+    print("success")
 
 
 def test_get_slices_from_getitem_subkeys():
     getitem_graph = get_getitem_dict_from_proxy_array_sample()
-    slices_dict = get_slices_from_getitem_subkeys(getitem_graph)
+    slices_dict, deps_dict = get_slices_from_getitem_subkeys(getitem_graph)
     expected_name = 'array-6f870a321e8529128cb9bb82b8573db5'
     expected = {expected_name: [(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,5)]}
     if not slices_dict == expected:
-        print("error")
+        print("error in", sys._getframe().f_code.co_name)
         print(slices_dict)
         print(expected)
         return 
-    print("it works")
+    print("success")
 
 
 def test_get_slices_from_getitem_keys():
     graph = get_graph_with_getitem()
     getitem_keys = ['getitem-430f856c4196ad50518e167d79ffd894']
-    slices_dict = get_slices_from_getitem_keys(graph, getitem_keys)
+    slices_dict, deps_dict = get_slices_from_getitem_keys(graph, getitem_keys)
     expected_name = 'array-4d8aa96f6f06806aeb9a11b75751b175'
     expected = {expected_name: [(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,5),(0,0,6)]}
     if not slices_dict == expected:
-        print("error")
+        print("error in", sys._getframe().f_code.co_name)
         print(slices_dict)
         print(expected)
         return 
-    print("it works")
+    print("success")
+
+
+def test_get_slices_from_dask_graph():
+    graph = {'rechunk-merge-bcfb966a39aa5079f6457f1530dd85df': get_rechunk_dict_without_proxy_array_sample(),
+             'rechunk-merge-a168f56ba79513b9ed87b2f22dd07458': get_rechunk_dict_from_proxy_array_sample(),
+             'getitem-c6555b775be6a9d771866321a0d38252': get_getitem_dict_from_proxy_array_sample()}
+
+    slices_dict, deps_dict = get_slices_from_dask_graph(graph)
+
+    expected = {
+        'array-3ec4eddf5e385f67eb8007734372b503': [(0,0,0),(0,0,1),(0,0,2),(0,1,0),(0,1,1),(0,1,2),(0,0,3),(0,1,3),(0,2,0),(0,2,1),(0,2,2)],
+        'array-6f870a321e8529128cb9bb82b8573db5': [(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,5)]
+    }
+
+    for key, val in expected.items():
+        if set(slices_dict[key]) != set(val):
+            print("error in", sys._getframe().f_code.co_name)
+            print(key)
+            print(set(slices_dict[key]))
+            print(set(val))
+            return 
+    print("success")

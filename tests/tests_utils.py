@@ -122,7 +122,7 @@ def get_rechunk_dict_without_proxy_array_sample():
     2,
     1), (slice(0, 60, None), slice(0, 404, None), slice(0, 700, None)))
     }
-
+    
 def get_rechunk_dict_from_proxy_array_sample(array_name='array-3ec4eddf5e385f67eb8007734372b503', array_names=None, add_list=[1,2,3]):
     if array_names == None:
         array_names = [array_name, array_name, array_name]
