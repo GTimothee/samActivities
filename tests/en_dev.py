@@ -1,5 +1,6 @@
 
 import sys
+from dask.base import tokenize
 
 """
     slices_dict :                       proxy-array -> list of slices
@@ -122,7 +123,6 @@ def get_slices_from_getitem_keys(graph, getitem_keys):
 # TODO generalize it to a graph/tree search
 def get_slices_from_dask_graph(graph):
     keys_dict = get_keys_from_graph(graph)
-    
     rechunk_keys = keys_dict['rechunk-merge']
     getitem_keys = keys_dict['getitem']
 
@@ -191,18 +191,6 @@ def main():
     array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape = get_arrays_dictionaries(graph, slices_dict)
     slices_dict = convert_slices_list_to_numeric_slices(slices_dict, original_array_chunks)
     apply_clustered_strategy(graph, slices_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape)
-
-
-def apply_clustered_strategy(graph, slices_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
-    for proxy_array_name, slices_list in slices_dict.items(): 
-        buffers = create_buffers(slices_list, proxy_array_name)
-
-        for load_index in range(len(buffers)):
-            load = buffers[load_index]
-            if len(load) > 1:
-                graph, root_node_name = create_root_node(graph, proxy_array_name, load, original_array_blocks_shape, original_array_chunk)
-                update_io_tasks(proxy_array_name, deps_dict, root_node_name, original_array_blocks_shape, original_array_chunk, load)
-    return graph
 
 
 # TODO support more strategies
@@ -285,7 +273,7 @@ def create_buffers(slices_list, proxy_array_name, nb_bytes_per_val=8):
 
 
 
-def create_root_node(dask_graph, proxy_array_name, load, original_array_blocks_shape, original_array_chunk):
+def create_buffer_node(dask_graph, proxy_array_name, load, original_array_blocks_shape, original_array_chunk):
 
     def get_coords_in_image(block_coord, original_array_chunk):
         return tuple([block_coord[i] * original_array_chunk[i] for i in range(3)])
@@ -330,16 +318,143 @@ def create_root_node(dask_graph, proxy_array_name, load, original_array_blocks_s
     return dask_graph, merged_array_proxy_name
 
 
-def update_io_tasks():
-    if config.get("io-optimizer.mode") == 'rechunked':
-        rechunk_task_keys = proxy_arrays_to_task_names_dict[proxy_array_name]
-        rechunk_dicts = [(rechunk_task_key, dask_graph[rechunk_task_key]) for rechunk_task_key in rechunk_task_keys]                       
+def apply_clustered_strategy(graph, slices_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
+    for proxy_array_name, slices_list in slices_dict.items(): 
+        buffers = create_buffers(slices_list, proxy_array_name)
 
-        for rechunk_task_key, rechunk_dict in rechunk_dicts:
-            replace_proxy_array_by_merged_proxy(rechunk_dict, proxy_array_name)
+        for load_index in range(len(buffers)):
+            load = buffers[load_index]
+            if len(load) > 1:
+                graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, original_array_blocks_shape, original_array_chunk)
+                update_io_tasks(graph, deps_dict, proxy_array_name, original_array_chunk, original_array_blocks_shape, buffer_node_name)
+    return graph
+
+
+def convert_proxy_to_buffer_slices(proxy_key, merged_task_name, slices):
+    proxy_array_name = proxy_key[0]
+    proxy_array_part_targeted = proxy_key[1:]
+    original_array_name = array_to_original[proxy_array_name]
+    img_chunks_sizes = original_array_chunks[original_array_name]
+    img_nb_blocks_per_dim = original_array_blocks_shape[original_array_name]
+    _, _, start_of_block, _ = merged_task_name.split('-')
+
+    # convert 3d pos in image to 3d pos in buffer (merged block)
+    num_pos = _3d_to_numeric_pos(proxy_array_part_targeted, img_nb_blocks_per_dim, order='C') # TODO à remove car on le fait deja avant
+    num_pos_in_merged = num_pos - int(start_of_block)
+    proxy_array_part_in_merged = numeric_to_3d_pos(num_pos_in_merged, img_nb_blocks_per_dim, order='C')
+
+    _slice = proxy_array_part_in_merged
+
+    start = [None] * 3
+    stop = [None] * 3
+    for i, sl in enumerate(slices):
+        if sl.start != None:
+            start[i] = (_slice[i] * img_chunks_sizes[i]) + sl.start
+        else:
+            start[i] = _slice[i] * img_chunks_sizes[i]
+
+        if sl.stop != None:
+            stop[i] = (_slice[i] * img_chunks_sizes[i]) + sl.stop
+        else:
+            stop[i] = (_slice[i] + 1) * img_chunks_sizes[i] 
+            
+    return (slice(start[0], stop[0], None),
+            slice(start[1], stop[1], None),
+            slice(start[2], stop[2], None))
+
+
+def add_getitem_task_in_graph(graph, buffer_proxy_name, array_proxy_key, slices_tuple):
+    """
+    buffer_proxy_name: buffer replacing array_proxy_name
+    """
+    new_task_name = 'buffer-proxy-' + tokenize(slices_tuple)
+    new_task_key = (new_task_name, 0, 0, 0)
+    slices = convert_proxy_to_buffer_slices(array_proxy_key, buffer_proxy_name, slices_tuple)
+    new_task_val = (getfunc, (buffer_proxy_name, 0, 0, 0), slices)
+    graph[new_task_name] = {new_task_key: new_task_val}
+    return getitem_task_name, graph
+
+
+def recursive_search_and_update(graph, _list):
+    if not isinstance(_list[0], tuple):
+        for i in range(len(_list)):
+            sublist = _list[i] 
+            graph, sublist = recursive_search(graph, sublist)
+            _list[i] = sublist
+    else:
+        for i in range(len(_list)):
+            target_key = _list[i]
+            target_name = target_key[0]
+            if 'array-' in target_name:
+                getitem_task_name, graph = add_getitem_task_in_graph(graph, buffer_node_name, task_key, slices_tuple)
+                _list[i] = getitem_task_name
+    return graph, _list
+
+
+def update_io_tasks_rechunk(graph, rechunk_graph, dependent_tasks, original_array_chunk, original_array_blocks_shape, buffer_node_name):
+
+
+    def replace_rechunk_merge(val, graph, buffer_node_name):
+        f, concat_list = val
+        graph, concat_list = recursive_search_and_update(graph, concat_list)
+        return graph, (f, concat_list)
+
+
+    def replace_rechunk_split(val, original_array_blocks_shape):
+        get_func, target_key, slices = val
+        _, s1, s2, s3 = target_key
+        array_part_num = _3d_to_numeric_pos((s1, s2, s3), original_array_blocks_shape, order='C') 
+
+        if not array_part_num in load:
+            return val
+        
+        slice_of_interest = convert_proxy_to_buffer_slices(proxy_array_part, original_array_chunk, merged_task_name, original_array_blocks_shape, slices)
+        return (get_func, (merged_task_name, 0, 0, 0), slice_of_interest)
+
+
+    for k in list(rechunk_graph.keys()):
+        if k in dependent_tasks:
+            key_name = k[0]
+            val = rechunk_graph[k]
+            if 'rechunk-merge' in key_name:
+                graph, new_val = replace_rechunk_merge(val, graph, buffer_node_name)
+            elif 'rechunk-split' in key_name:
+                new_val = replace_rechunk_split(val)
+            rechunk_graph[k] = new_val
+
+
+
+def update_io_tasks_getitem(getitem_graph):
+    for k in list(getitem_graph.keys()):
+        if k in dependent_tasks:
+            val = getitem_graph[k]
+            get_func, proxy_key, slices = val
+
+            if np.all([tuple([sl.start, sl.stop]) == (None, None) for sl in slices]):
+                proxy_part = proxy_key[1:]
+                slice_of_interest = convert_proxy_to_buffer_slices(proxy_part, img_chunks_sizes, merged_task_name, img_nb_blocks_per_dim, None)
+            else:
+                raise ValueError("TODO!")
+            new_val = (get_func, (merged_task_name, 0, 0, 0), slice_of_interest)
+            getitem_graph[k] = new_val   
+
+
+def update_io_tasks(graph, deps_dict, proxy_array_name, original_array_chunk, original_array_blocks_shape, buffer_node_name):
+    keys_dict = get_keys_from_graph(graph)
+    rechunk_keys = keys_dict['rechunk-merge']
+    getitem_keys = keys_dict['getitem']
+    
+    dependent_tasks = deps_dict[proxy_array_name]
+
+    for key in rechunk_keys:
+        update_io_tasks_rechunk(graph, graph[key], dependent_tasks, original_array_chunk, original_array_blocks_shape, buffer_node_name)
+
+    for key in getitem_keys:
+        update_io_tasks_getitem(graph[key], proxy_array_name, dependent_tasks)        
 
 
 ######### not refactored:  
+
 
 def numeric_to_3d_pos(numeric_pos, shape, order):
     if order == 'F':  
@@ -359,6 +474,7 @@ def numeric_to_3d_pos(numeric_pos, shape, order):
     k = numeric_pos
     return (i, j, k)
 
+
 def _3d_to_numeric_pos(_3d_pos, shape, order):
     """
     in C order for example, should be ((_3d_pos[0]-1) * nb_blocks_per_slice) 
@@ -376,139 +492,17 @@ def _3d_to_numeric_pos(_3d_pos, shape, order):
     return (_3d_pos[0] * nb_blocks_per_slice) + (_3d_pos[1] * nb_blocks_per_row) + _3d_pos[2] 
 
 
+def get_slice_from_merged_task_name(merged_task_name, target_slice, img_nb_blocks_per_dim):
+    _, _, start_of_block, _ = merged_task_name.split('-')
     
-def update_io_tasks(proxy_array_name, 
-                    proxy_arrays_to_task_names_dict, 
-                    merged_task_name,
-                    img_nb_blocks_per_dim,
-                    img_chunks_sizes,
-                    load):
-    """
-    -find the tasks using the array_name (using dependencies?)
-    for each task
-        -replace the array_name subpart 
-        -replace the slices part
-    """
-    
-    def replace_proxy_array_by_merged_proxy(rechunk_dict, proxy_array_name):
-        """def replace_rechunk_merge(val):
-            _, concat_list = val
-            while not isinstance(concat_list[0][0], tuple):
-                concat_list = concat_list[0]
-            for _list in concat_list:
-                for i in range(len(_list)):
-                    tupl = _list[i]
-                    if proxy_array_name == tupl[0]:
-                        #target_name, s1, s2, s3 = tupl
-                        pass
-            return"""
-        
-        def replace_rechunk_split(val):
-            get_func, target_key, slices = val
-            _, s1, s2, s3 = target_key
-            proxy_array_part = (s1, s2, s3)
-            array_part_num = _3d_to_numeric_pos(proxy_array_part, img_nb_blocks_per_dim, order='C') 
-            if array_part_num in load:
-                slice_of_interest = get_slice_from_proxy_part_key(proxy_array_part, img_chunks_sizes, merged_task_name, img_nb_blocks_per_dim, slices)
-                new_val = (get_func, (merged_task_name, 0, 0, 0), slice_of_interest)
-                return new_val
-            else:
-                return val
+    sot = [s.start for s in target_slice]
+    sot = _3d_to_numeric_pos(sot, img_nb_blocks_per_dim, order='C')
+    sot = sot - start_of_block
 
-        for k in list(rechunk_dict.keys()):
-            key_name = k[0]
-            val = rechunk_dict[k]
-            if 'rechunk-merge' in key_name:
-                #new_val = replace_rechunk_merge(val)
-                #rechunk_dict[k] = new_val
-                pass
-            elif 'rechunk-split' in key_name:
-                new_val = replace_rechunk_split(val)
-                rechunk_dict[k] = new_val
-            else:
-                pass 
-    
-    def get_tasks_targeting_proxy(getitem_dict, proxy_array_name):
-        return [(k,v) for k, v in getitem_dict.items() if v[1][0] == proxy_array_name]
+    eot = [s.stop + 1 for s in target_slice]
+    eot = _3d_to_numeric_pos(eot, img_nb_blocks_per_dim, order='C')
+    eot = eot - start_of_block
 
-    def get_slice_from_proxy_part_key(proxy_array_part_targeted, img_chunks_sizes, merged_task_name, img_nb_blocks_per_dim, slices):
-        """
-        proxy_array_part_targeted: tuple (x, y, z) from (proxy_array_name, x, y, z)
-        """
-        _, _, start_of_block, _ = merged_task_name.split('-')
-
-        # convert 3d pos in image to 3d pos in merged block
-        num_pos = _3d_to_numeric_pos(proxy_array_part_targeted, img_nb_blocks_per_dim, order='C') # TODO à remove car on le fait deja avant
-        num_pos_in_merged = num_pos - int(start_of_block)
-        proxy_array_part_in_merged = numeric_to_3d_pos(num_pos_in_merged, img_nb_blocks_per_dim, order='C')
-
-        _slice = proxy_array_part_in_merged
-
-        start = [None] * 3
-        stop = [None] * 3
-        for i, sl in enumerate(slices):
-            if sl.start != None:
-                start[i] = (_slice[i] * img_chunks_sizes[i]) + sl.start
-            else:
-                start[i] = _slice[i] * img_chunks_sizes[i]
-
-            if sl.stop != None:
-                stop[i] = (_slice[i] * img_chunks_sizes[i]) + sl.stop
-            else:
-                stop[i] = (_slice[i] + 1) * img_chunks_sizes[i] 
-                
-        return (slice(start[0], stop[0], None),
-                slice(start[1], stop[1], None),
-                slice(start[2], stop[2], None))
-
-
-    def get_slice_from_merged_task_name(merged_task_name, target_slice, img_nb_blocks_per_dim):
-        _, _, start_of_block, _ = merged_task_name.split('-')
-        
-        sot = [s.start for s in target_slice]
-        sot = _3d_to_numeric_pos(sot, img_nb_blocks_per_dim, order='C')
-        sot = sot - start_of_block
-
-        eot = [s.stop + 1 for s in target_slice]
-        eot = _3d_to_numeric_pos(eot, img_nb_blocks_per_dim, order='C')
-        eot = eot - start_of_block
-
-        return (slice(sot[0], eot[0], None), 
-                slice(sot[1], eot[1], None), 
-                slice(sot[2], eot[2], None))
-
-    if config.get("io-optimizer.mode") == 'rechunked':
-        rechunk_task_keys = proxy_arrays_to_task_names_dict[proxy_array_name]
-        rechunk_dicts = [(rechunk_task_key, dask_graph[rechunk_task_key]) for rechunk_task_key in rechunk_task_keys]                       
-
-        for rechunk_task_key, rechunk_dict in rechunk_dicts:
-            replace_proxy_array_by_merged_proxy(rechunk_dict, proxy_array_name)
-    else:
-        getitem_task_names = proxy_arrays_to_task_names_dict[proxy_array_name]
-        # dict with key = proxy_array_name, val = tasks using this proxy_array
-        getitem_dicts = [(getitem_task_name, dask_graph[getitem_task_name]) for getitem_task_name in getitem_task_names] 
-        for task_name, getitem_dict in getitem_dicts:
-            print("processing", task_name, "for load", load)
-            subtasks = get_tasks_targeting_proxy(getitem_dict, proxy_array_name)
-            for kv_pair in subtasks: 
-                getitem_key, value = kv_pair
-                get_func, _, slices = value # TODO replace _ by proxy_key and replace value[1] below by proxy_key
-                slices_key = tuple(value[1][1:])
-                num_pos = _3d_to_numeric_pos(slices_key, img_nb_blocks_per_dim, order='C')
-                
-                if num_pos in load:
-                    #print("\tbeing treated", value[1])
-                    if np.all([tuple([sl.start, sl.stop]) == (None, None) for sl in slices]):
-                        proxy_array_part_targeted = value[1][1:]
-                        slice_of_interest = get_slice_from_proxy_part_key(proxy_array_part_targeted, 
-                                                                        img_chunks_sizes, 
-                                                                        merged_task_name, 
-                                                                        img_nb_blocks_per_dim,
-                                                                        None) # TODO a modifier
-                    else:
-                        raise ValueError("TODO!")
-                        #slice_of_interest = get_slice_from_merged_task_name(merged_task_name, slices, img_nb_blocks_per_dim)
-                    new_value = (get_func, (merged_task_name, 0, 0, 0), slice_of_interest)
-                    getitem_dict[getitem_key] = new_value # replace
-    return
-
+    return (slice(sot[0], eot[0], None), 
+            slice(sot[1], eot[1], None), 
+            slice(sot[2], eot[2], None))
