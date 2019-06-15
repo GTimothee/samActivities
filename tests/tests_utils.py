@@ -340,11 +340,11 @@ def get_graph_with_getitem():
 
 
 
-
+concat_func = None
 rechunk_merge_example = {('rechunk-merge-7c9f5c6cedeb992c5f39c40adfae384b',
   0,
   0,
-  0): (<function dask.array.core.concatenate3(arrays)>, [[[('array-edb82dc9c0509fc1e17bc84538520340',
+  0): (concat_func, [[[('array-edb82dc9c0509fc1e17bc84538520340',
       0,
       0,
       0),
