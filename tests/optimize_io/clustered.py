@@ -1,3 +1,5 @@
+from .optimize_io import *
+
 __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node", 
            "update_io_tasks", "update_io_tasks_rechunk", "update_io_tasks_getitem", 
            "add_getitem_task_in_graph", "recursive_search_and_update", "convert_proxy_to_buffer_slices")
@@ -21,16 +23,16 @@ def create_buffers(slices_list, proxy_array_name, nb_bytes_per_val=8):
     """
 
     def get_buffer_mem_size(config):
-    try:
-        optimization = config.get("io-optimizer")
         try:
-            return config.get("io-optimizer.memory_available")
+            optimization = config.get("io-optimizer")
+            try:
+                return config.get("io-optimizer.memory_available")
+            except:
+                print("missing configuration information memory_available")
+                print("using default configuration: 1 gigabytes")
+                return 1000000000
         except:
-            print("missing configuration information memory_available")
-            print("using default configuration: 1 gigabytes")
-            return 1000000000
-    except:
-        raise ValueError("io-optimizer not enabled")
+            raise ValueError("io-optimizer not enabled")
 
 
     def get_load_strategy(buffer_mem_size, nb_bytes_per_val):
@@ -104,9 +106,9 @@ def create_buffer_node(dask_graph, proxy_array_name, load, original_array_blocks
         for block_index_num in range(load[0], load[-1] + 1):
             block_index_3d = numeric_to_3d_pos(block_index_num, original_array_blocks_shape, order='C') 
             for j in range(3):
-                if _max[j] = None:
+                if _max[j] == None:
                     _max[j] = block_index_3d[j]
-                if _min[j] = None:
+                if _min[j] == None:
                     _min[j] = block_index_3d[j]
                 if block_index_3d[j] > _max[j]:
                     _max[j] = block_index_3d[j]
@@ -195,18 +197,6 @@ def update_io_tasks_getitem(getitem_graph):
             getitem_graph[k] = new_val   
 
 
-def add_getitem_task_in_graph(graph, buffer_proxy_name, array_proxy_key, slices_tuple):
-    """
-    buffer_proxy_name: buffer replacing array_proxy_name
-    """
-    new_task_name = 'buffer-proxy-' + tokenize(slices_tuple)
-    new_task_key = (new_task_name, 0, 0, 0)
-    slices = convert_proxy_to_buffer_slices(array_proxy_key, buffer_proxy_name, slices_tuple)
-    new_task_val = (getfunc, (buffer_proxy_name, 0, 0, 0), slices)
-    graph[new_task_name] = {new_task_key: new_task_val}
-    return getitem_task_name, graph
-
-
 def recursive_search_and_update(graph, _list):
     if not isinstance(_list[0], tuple):
         for i in range(len(_list)):
@@ -223,20 +213,35 @@ def recursive_search_and_update(graph, _list):
     return graph, _list
 
 
-def convert_proxy_to_buffer_slices(proxy_key, merged_task_name, slices):
+def add_getitem_task_in_graph(graph, buffer_proxy_name, array_proxy_key, slices_tuple):
+    """
+    buffer_proxy_name: buffer replacing array_proxy_name
+    """
+    new_task_name = 'buffer-proxy-' + tokenize(slices_tuple)
+    new_task_key = (new_task_name, 0, 0, 0)
+    slices = convert_proxy_to_buffer_slices(array_proxy_key, buffer_proxy_name, slices_tuple)
+    new_task_val = (getfunc, (buffer_proxy_name, 0, 0, 0), slices)
+    graph[new_task_name] = {new_task_key: new_task_val}
+    return getitem_task_name, graph
+
+
+def convert_proxy_to_buffer_slices(proxy_key, merged_task_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape):
+    """ Get the slices of the targetted block in the buffer, from the index of this block in the proxy array. 
+    + apply the slices 
+    """
     proxy_array_name = proxy_key[0]
-    proxy_array_part_targeted = proxy_key[1:]
+    pos_in_proxy_array = proxy_key[1:]
     original_array_name = array_to_original[proxy_array_name]
     img_chunks_sizes = original_array_chunks[original_array_name]
     img_nb_blocks_per_dim = original_array_blocks_shape[original_array_name]
-    _, _, start_of_block, _ = merged_task_name.split('-')
+    _, _, num_start_of_buffer, _ = merged_task_name.split('-')
 
     # convert 3d pos in image to 3d pos in buffer (merged block)
-    num_pos = _3d_to_numeric_pos(proxy_array_part_targeted, img_nb_blocks_per_dim, order='C') # TODO à remove car on le fait deja avant
-    num_pos_in_merged = num_pos - int(start_of_block)
-    proxy_array_part_in_merged = numeric_to_3d_pos(num_pos_in_merged, img_nb_blocks_per_dim, order='C')
+    num_pos_in_proxy = _3d_to_numeric_pos(pos_in_proxy_array, img_nb_blocks_per_dim, order='C') 
+    num_pos_in_buffer = num_pos_in_proxy - int(num_start_of_buffer)
+    pos_in_buffer = numeric_to_3d_pos(num_pos_in_buffer, img_nb_blocks_per_dim, order='C')
 
-    _slice = proxy_array_part_in_merged
+    _slice = pos_in_buffer
 
     start = [None] * 3
     stop = [None] * 3

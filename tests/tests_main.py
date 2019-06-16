@@ -26,4 +26,3 @@ def test_get_dicts():
 def test_clustered():
     test_convert_proxy_to_buffer_slices()
 
-test_convert_proxy_to_buffer_slices()

@@ -1,6 +1,7 @@
 
 import sys
 from dask.base import tokenize
+import math
 
 __all__ = ("main", "convert_slices_list_to_numeric_slices", "numeric_to_3d_pos", "_3d_to_numeric_pos", "get_slice_from_merged_task_name")
 
@@ -53,7 +54,7 @@ def _3d_to_numeric_pos(_3d_pos, shape, order):
     but as we start at 0 we can keep (_3d_pos[0] * nb_blocks_per_slice)
     """
     if order == 'F':  
-        nb_blocks_per_row = shape[0]s
+        nb_blocks_per_row = shape[0]
         nb_blocks_per_slice = shape[0] * shape[1]
     elif order == 'C':
         nb_blocks_per_row = shape[2]
