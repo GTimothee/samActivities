@@ -26,9 +26,9 @@ def get_original_array_from_proxy_array_name(graph, proxy_array_name):
     for chunk_key in list(proxy_dict.keys()):
         if isinstance(chunk_key, str):
             if 'array-original' in chunk_key:
-                array_original_name = chunk_key
+                original_array_name = chunk_key
                 break 
-    if not array_original_name:
+    if not original_array_name:
         raise ValueError("Original array not found. Are you sure that you gave a proxy array?")
     return original_array_name, proxy_dict[original_array_name]
 

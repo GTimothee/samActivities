@@ -1,21 +1,8 @@
-import sys
-
-sys.path.insert(0,'/home/user/Documents/workspace/projects/dask') # custom dask
-sys.path.insert(1,'/home/user/Documents/workspace/projects/samActivities/tests') 
-sys.path.insert(2,'/home/user/Documents/workspace/projects/samActivities/tests/optimize_io')
-
-import dask
-import dask.array as da
-
 from tests.test_optimize_io import *
 from tests.test_get_dicts import *
 from tests.test_get_slices import *
 from tests.test_clustered import *
 from tests_utils import *
-
-import time, os
-import numpy as np
-import math
 
 
 def test_get_slices():
@@ -29,7 +16,14 @@ def test_get_slices():
     test_get_slices_from_getitem_keys()
     test_get_slices_from_dask_graph()
 
+
 def test_get_dicts():
     test_get_array_block_dims()
+    test_get_original_array_from_proxy_array_name()
+    test_get_arrays_dictionaries()
 
-test_get_array_block_dims()
+
+def test_clustered():
+    test_convert_proxy_to_buffer_slices()
+
+test_convert_proxy_to_buffer_slices()
