@@ -26,3 +26,4 @@ def test_get_dicts():
 def test_clustered():
     test_convert_proxy_to_buffer_slices()
 
+test_add_getitem_task_in_graph()
