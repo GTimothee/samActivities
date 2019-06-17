@@ -1,7 +1,10 @@
-from tests.test_optimize_io import *
-from tests.test_get_dicts import *
-from tests.test_get_slices import *
-from tests.test_clustered import *
+import sys
+sys.path.insert(0, './tests')
+
+from test_optimize_io import *
+from test_get_dicts import *
+from test_get_slices import *
+from test_clustered import *
 from tests_utils import *
 
 
@@ -25,5 +28,7 @@ def test_get_dicts():
 
 def test_clustered():
     test_convert_proxy_to_buffer_slices()
+    test_add_getitem_task_in_graph()
+    test_recursive_search_and_update()
 
-test_add_getitem_task_in_graph()
+test_update_io_tasks_getitem()

@@ -155,13 +155,13 @@ def update_io_tasks(graph, deps_dict, proxy_array_name, original_array_chunk, or
         update_io_tasks_rechunk(graph, graph[key], original_array_chunk, original_array_blocks_shape, dependent_tasks, buffer_node_name)
 
     for key in getitem_keys:
-        update_io_tasks_getitem(graph[key], proxy_array_name, dependent_tasks, dependent_tasks, buffer_node_name)   
+        graph[key] = update_io_tasks_getitem(graph[key], proxy_array_name, dependent_tasks, dependent_tasks, buffer_node_name)   
 
 
 def update_io_tasks_rechunk(graph, rechunk_graph, original_array_chunk, original_array_blocks_shape, dependent_tasks, buffer_node_name):
     def replace_rechunk_merge(val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
         f, concat_list = val
-        graph, concat_list = recursive_search_and_update(concat_list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+        graph, concat_list = recursive_search_and_update(graph, concat_list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
         return graph, (f, concat_list)
 
     def replace_rechunk_split(val, original_array_blocks_shape):
@@ -186,31 +186,27 @@ def update_io_tasks_rechunk(graph, rechunk_graph, original_array_chunk, original
             rechunk_graph[k] = new_val
 
 
-def update_io_tasks_getitem(getitem_graph):
+def update_io_tasks_getitem(getitem_graph, original_array_chunks, buffer_node_name, original_array_blocks_shape):
     for k in list(getitem_graph.keys()):
         if k in dependent_tasks:
             val = getitem_graph[k]
             get_func, proxy_key, slices = val
-
-            if np.all([tuple([sl.start, sl.stop]) == (None, None) for sl in slices]):
-                proxy_part = proxy_key[1:]
-                slice_of_interest = convert_proxy_to_buffer_slices(proxy_part, img_chunks_sizes, merged_task_name, img_nb_blocks_per_dim, None)
-            else:
-                raise ValueError("TODO!")
-            new_val = (get_func, (merged_task_name, 0, 0, 0), slice_of_interest)
+            slice_of_interest = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
+            new_val = (get_func, (buffer_node_name, 0, 0, 0), slice_of_interest)
             getitem_graph[k] = new_val   
+    return getitem_graph
 
 
-def recursive_search_and_update(_list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
+def recursive_search_and_update(graph, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
     if not isinstance(_list[0], tuple):
         for i in range(len(_list)):
             sublist = _list[i] 
-            graph, sublist = recursive_search(graph, sublist)
+            graph, sublist = recursive_search_and_update(graph, sublist, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
             _list[i] = sublist
     else:
         for i in range(len(_list)):
             target_key = _list[i]
-            if 'array-' in target_name:
+            if 'array-' in target_key[0]:
                 getitem_task_key, graph = add_getitem_task_in_graph(graph, buffer_node_name, target_key, array_to_original, original_array_chunks, original_array_blocks_shape)
                 _list[i] = getitem_task_key
     return graph, _list
@@ -229,7 +225,7 @@ def add_getitem_task_in_graph(graph, buffer_node_name, proxy_key, array_to_origi
     # get slices from buffer_proxy
     pos_in_buffer, slices_from_buffer = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
     buffer_proxy_subtask_key = tuple([buffer_proxy_name] + list(pos_in_buffer))
-    buffer_proxy_subtask_val = (getitem, (buffer_proxy_name, 0, 0, 0), slices_from_buffer)
+    buffer_proxy_subtask_val = (getitem, (buffer_node_name, 0, 0, 0), slices_from_buffer)
 
     # create buffer_proxy if does not exist
     if not buffer_proxy_name in list(graph.keys()):
@@ -237,8 +233,8 @@ def add_getitem_task_in_graph(graph, buffer_node_name, proxy_key, array_to_origi
     
     # add to buffer proxy
     d = graph[buffer_proxy_name]
-    d[buffer_proxy_subtask_key] = buffer_proxy_subtask_val
-
+    if not buffer_proxy_subtask_key in list(d.keys()):  # it is not possible to have two keys with different values
+        d[buffer_proxy_subtask_key] = buffer_proxy_subtask_val
     return buffer_proxy_subtask_key, graph
 
 

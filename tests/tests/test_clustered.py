@@ -80,7 +80,7 @@ def test_add_getitem_task_in_graph():
         
         buffer_proxy_name = buffer_proxy_subtask_key[0]
         pos_in_buffer = buffer_proxy_subtask_key[1:]
-        getitem, buffer_proxy_key, slices_from_buffer = buffer_proxy_subtask_val
+        getitem, buffer_key, slices_from_buffer = buffer_proxy_subtask_val
     except:
         print("error in", sys._getframe().f_code.co_name)
         print(graph)
@@ -89,6 +89,8 @@ def test_add_getitem_task_in_graph():
     # if expected data is here, test the values
     error = False
     if pos_in_buffer != (2, 0, 0):
+        error = True
+    if buffer_key[0] != 'buffer-465316453-10-23':
         error = True
     if buffer_proxy_name != 'buffer-465316453-10-23-proxy':
         error = True
@@ -99,3 +101,51 @@ def test_add_getitem_task_in_graph():
         print(graph)
         return
     print('success')
+
+
+def test_recursive_search_and_update():
+    graph = dict()
+    buffer_node_name = 'buffer-465316453-10-23'
+    array_to_original = {"array-645364531": "array-original-645364531"}
+    original_array_chunks = {"array-original-645364531": (10, 20, 30)}
+    original_array_blocks_shape = {"array-original-645364531": (5, 3, 2)}
+
+    _list = [[[('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 1), ("array-645364531", 2, 0, 0)],
+              [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 2), ("array-645364531", 1, 2, 0)],
+              [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 3), ("array-645364531", 2, 2, 2)]],
+            [[('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 4), ("array-645364531", 2, 1, 1)],
+             [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 5), ("array-645364531", 3, 1, 1)],
+             [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 6), ("array-645364531", 3, 1, 2)]]]
+
+    graph, _list = recursive_search_and_update(graph, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+    
+    slices_list = [("array-645364531", 2, 0, 0), ("array-645364531", 1, 2, 0), ("array-645364531", 2, 2, 2), ("array-645364531", 2, 1, 1), ("array-645364531", 3, 1, 1), ("array-645364531", 3, 1, 2)]
+    buffer_pos_list = list()
+    for i, s in enumerate(slices_list):
+        pos_in_buffer, slices = convert_proxy_to_buffer_slices(s, 'buffer-465316453-10-23', (slice(None, None, None), slice(None, None, None), slice(None, None, None)), array_to_original, original_array_chunks, original_array_blocks_shape)
+        buffer_pos_list.append(pos_in_buffer)
+
+    expected_list = [[[('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 1), ("buffer-465316453-10-23-proxy", buffer_pos_list[0][0], buffer_pos_list[0][1], buffer_pos_list[0][2])],
+                    [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 2), ("buffer-465316453-10-23-proxy", buffer_pos_list[1][0], buffer_pos_list[1][1], buffer_pos_list[1][2])],
+                    [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 3), ("buffer-465316453-10-23-proxy", buffer_pos_list[2][0], buffer_pos_list[2][1], buffer_pos_list[2][2])]],
+                    [[('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 4), ("buffer-465316453-10-23-proxy", buffer_pos_list[3][0], buffer_pos_list[3][1], buffer_pos_list[3][2])],
+                    [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 5), ("buffer-465316453-10-23-proxy", buffer_pos_list[4][0], buffer_pos_list[4][1], buffer_pos_list[4][2])],
+                    [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 6), ("buffer-465316453-10-23-proxy", buffer_pos_list[5][0], buffer_pos_list[5][1], buffer_pos_list[5][2])]]]
+    
+    if _list != expected_list:
+        print("error in", sys._getframe().f_code.co_name)
+        print(_list, "expected", _list)
+        return
+    
+    print("success")
+    return
+
+
+def test_update_io_tasks_getitem():
+    buffer_node_name = 'buffer-465316453-10-23'
+    array_to_original = {"array-645364531": "array-original-645364531"}
+    original_array_chunks = {"array-original-645364531": (10, 20, 30)}
+    original_array_blocks_shape = {"array-original-645364531": (5, 3, 2)}
+
+    getitem_grpah = get_getitem_dict_from_proxy_array_sample()
+    getitem_graph = update_io_tasks_getitem(getitem_graph, original_array_chunks, buffer_node_name, original_array_blocks_shape)
