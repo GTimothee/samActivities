@@ -30,5 +30,7 @@ def test_clustered():
     test_convert_proxy_to_buffer_slices()
     test_add_getitem_task_in_graph()
     test_recursive_search_and_update()
-
-test_update_io_tasks_getitem()
+    test_update_io_tasks_getitem()
+    test_update_io_tasks_rechunk()
+    test_update_io_tasks()
+    test_create_buffer_node()

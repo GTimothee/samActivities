@@ -17,14 +17,14 @@ def main():
     graph = None # TODO
     slices_dict = get_slices_from_dask_graph(graph)
     array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape = get_arrays_dictionaries(graph, slices_dict)
-    slices_dict = convert_slices_list_to_numeric_slices(slices_dict, original_array_chunks)
+    slices_dict = convert_slices_list_to_numeric_slices(slices_dict, array_to_original, original_array_chunks)
     graph = apply_clustered_strategy(graph, slices_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape)
 
 
-def convert_slices_list_to_numeric_slices(slices_dict, original_array_chunks):
+def convert_slices_list_to_numeric_slices(slices_dict, array_to_original, original_array_chunks):
     for proxy_array, slices_list in slices_dict.items():
         slices_list = sorted(list(set(slices_list)))
-        array_dims = original_array_chunks[proxy_array]
+        array_dims = original_array_chunks[array_to_original[proxy_array]]
         slices_list = [_3d_to_numeric_pos(s, array_dims, order='C') for s in slices_list]
     return slices_dict
 
