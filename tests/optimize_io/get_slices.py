@@ -5,13 +5,21 @@ __all__ = ("get_slices_from_dask_graph", "get_slices_from_rechunk_keys", "get_sl
 # TODO generalize it to a graph/tree search
 def get_slices_from_dask_graph(graph):
     keys_dict = get_keys_from_graph(graph)
-    rechunk_keys = keys_dict['rechunk-merge']
-    getitem_keys = keys_dict['getitem']
+    slices_dict = dict()
+    deps_dict = dict()
 
-    slices_dict, deps_dict = get_slices_from_rechunk_keys(graph, rechunk_keys)
-    slices_dict_2, deps_dict_2 = get_slices_from_getitem_keys(graph, getitem_keys)
-    slices_dict.update(slices_dict_2)
-    deps_dict.update(deps_dict_2)
+    if 'rechunk-merge' in list(keys_dict.keys()):
+        rechunk_keys = keys_dict['rechunk-merge']
+        s1, d1 = get_slices_from_rechunk_keys(graph, rechunk_keys)
+        slices_dict.update(s1)
+        deps_dict.update(d1)
+        
+    if 'getitem' in list(keys_dict.keys()):
+        getitem_keys = keys_dict['getitem']
+        s2, d2 = get_slices_from_getitem_keys(graph, getitem_keys)
+        slices_dict.update(s2)
+        deps_dict.update(d2)
+
     return slices_dict, deps_dict
 
 

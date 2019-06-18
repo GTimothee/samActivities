@@ -1,20 +1,6 @@
-import sys
 
-sys.path.insert(0,'/home/user/Documents/workspace/projects/dask') # custom dask
-sys.path.insert(1,'/home/user/Documents/workspace/projects/samActivities/tests') 
-sys.path.insert(2,'/home/user/Documents/workspace/projects/samActivities/tests/optimize_io')
-
-import dask
-import dask.array as da
-
-import optimize_io
 from optimize_io.get_slices import *
 
-from tests_utils import *
-
-import time, os
-import numpy as np
-import math
 
 
 # TODO: verify deps_dict for all tests

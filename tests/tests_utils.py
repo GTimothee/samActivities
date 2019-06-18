@@ -1,21 +1,6 @@
-import sys
-sys.path.insert(0,'/home/user/Documents/workspace/projects/dask') # custom dask
-sys.path.insert(1,'/home/user/Documents/workspace/projects/samActivities/') # my utility lib
-import dask
-import dask.array as da
-import experience3
-from experience3.utils import create_random_cube, load_array_parts, get_dask_array_from_hdf5
-from dask.array.io_optimization import optimize_io
-import time, os
-import numpy as np
 import math
+from experience3.utils import create_random_cube, load_array_parts, get_dask_array_from_hdf5
 
-cases = {
-    0:'slabs_dask_interpol',
-    1:'slabs_previous_exp',
-    2:'blocks_dask_interpol',
-    3:'blocks_previous_exp'
-}
 
 def logical_chunks_tests(arr, case):
     if case == 'slabs_dask_interpol':

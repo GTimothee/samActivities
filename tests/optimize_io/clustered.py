@@ -1,29 +1,32 @@
-from .optimize_io import *
-from .get_slices import *
-from .get_dicts import *
-from dask.base import tokenize
 
+from get_slices import *
+from get_dicts import *
+import math
+
+from dask.base import tokenize
 import operator
 from operator import getitem
 
+
 __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node", 
            "update_io_tasks", "update_io_tasks_rechunk", "update_io_tasks_getitem", 
-           "add_getitem_task_in_graph", "recursive_search_and_update", "convert_proxy_to_buffer_slices")
+           "add_getitem_task_in_graph", "recursive_search_and_update", "convert_proxy_to_buffer_slices",
+           "numeric_to_3d_pos", "_3d_to_numeric_pos")
 
 
-def apply_clustered_strategy(graph, slices_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
+def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
     for proxy_array_name, slices_list in slices_dict.items(): 
-        buffers = create_buffers(slices_list, proxy_array_name)
+        buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape)
 
         for load_index in range(len(buffers)):
             load = buffers[load_index]
             if len(load) > 1:
-                graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, original_array_blocks_shape, original_array_chunks)
-                graph = update_io_tasks(graph, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
+                graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks)
+                graph = update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
     return graph
 
 
-def create_buffers(slices_list, proxy_array_name, nb_bytes_per_val=8):
+def create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=8):
     """ current strategy : entire blocks
     # TODO support more strategies
     """
@@ -41,19 +44,19 @@ def create_buffers(slices_list, proxy_array_name, nb_bytes_per_val=8):
             raise ValueError("io-optimizer not enabled")
 
 
-    def get_load_strategy(buffer_mem_size, nb_bytes_per_val):
+    def get_load_strategy(buffer_mem_size, block_shape, original_array_blocks_shape, nb_bytes_per_val):
         """ get clustered writes best load strategy given the memory available for io optimization
         """
         block_mem_size = block_shape[0] * block_shape[1] * block_shape[2] * nb_bytes_per_val
-        block_row_size = block_mem_size * img_nb_blocks_per_dim[2]
-        block_slice_size = block_row_size * img_nb_blocks_per_dim[1]
+        block_row_size = block_mem_size * original_array_blocks_shape[2]
+        block_slice_size = block_row_size * original_array_blocks_shape[1]
 
         if buffer_mem_size >= block_slice_size:
             nb_slices = math.floor(buffer_mem_size / block_slice_size)
-            return "slices", nb_slices * img_nb_blocks_per_dim[2] * img_nb_blocks_per_dim[1]
+            return "slices", nb_slices * original_array_blocks_shape[2] * original_array_blocks_shape[1]
         elif buffer_mem_size >= block_row_size:
             nb_rows = math.floor(buffer_mem_size / block_row_size)
-            return "rows", nb_rows * img_nb_blocks_per_dim[2]
+            return "rows", nb_rows * original_array_blocks_shape[2]
         else:
             return "blocks", math.floor(buffer_mem_size / block_mem_size)
 
@@ -86,16 +89,16 @@ def create_buffers(slices_list, proxy_array_name, nb_bytes_per_val=8):
         else:
             return list_of_lists, prev_i
             
-
     original_array_name = array_to_original[proxy_array_name]
     original_array_blocks_shape = original_array_blocks_shape[original_array_name]
-    buffer_mem_size = get_buffer_mem_size(config)
-    strategy, nb_blocks_per_load = get_load_strategy(buffer_mem_size)
+    buffer_mem_size = 1000000000 # get_buffer_mem_size(config)
+    block_shape = original_array_chunks[original_array_name]
+    strategy, nb_blocks_per_load = get_load_strategy(buffer_mem_size, block_shape, original_array_blocks_shape, nb_bytes_per_val)
 
-    slices_list, prev_i = new_list(list())
+    list_of_lists, prev_i = new_list(list())
     while len(slices_list) > 0:
         next_i = slices_list.pop(0)
-        slices_list, prev_i = test_if_create_new_load(list_of_lists, prev_i, strategy, original_array_blocks_shape)
+        list_of_lists, prev_i = test_if_create_new_load(list_of_lists, prev_i, strategy, original_array_blocks_shape)
         list_of_lists[len(list_of_lists) - 1].append(next_i)
         prev_i = next_i       
 
@@ -149,7 +152,7 @@ def create_buffer_node(dask_graph, proxy_array_name, load, array_to_original, or
     return dask_graph, merged_array_proxy_name
 
 
-def update_io_tasks(graph, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name):
+def update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name):
     keys_dict = get_keys_from_graph(graph)
     rechunk_keys = keys_dict['rechunk-merge']
     getitem_keys = keys_dict['getitem']
@@ -157,62 +160,81 @@ def update_io_tasks(graph, deps_dict, proxy_array_name, array_to_original, origi
     dependent_tasks = deps_dict[proxy_array_name]
 
     for key in rechunk_keys:
-        graph, graph[key] = update_io_tasks_rechunk(graph, graph[key],dependent_tasks, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+        graph, graph[key] = update_io_tasks_rechunk(graph, graph[key], load, dependent_tasks, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
 
     for key in getitem_keys:
-        graph[key] = update_io_tasks_getitem(graph[key], buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape)   
+        graph[key] = update_io_tasks_getitem(graph[key], load, buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape)   
 
     return graph
 
-def update_io_tasks_rechunk(graph, rechunk_graph, dependent_tasks, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
-    def replace_rechunk_merge(graph, val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
+
+def update_io_tasks_rechunk(graph, rechunk_graph, load, dependent_tasks, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
+    def replace_rechunk_merge(graph, load, val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
         f, concat_list = val
-        graph, concat_list = recursive_search_and_update(graph, concat_list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+        graph, concat_list = recursive_search_and_update(graph, load, concat_list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
         return graph, (f, concat_list)
 
-    def replace_rechunk_split(val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
+    def replace_rechunk_split(val, load, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
         # extract proxy name and slices
         get_func, proxy_key, slices = val
-        array_proxy_name = proxy_key[0]
-        proxy_array_part = proxy_key[1:]
-        
-        pos_in_buffer, slices_from_buffer  = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
-        return (get_func, (buffer_node_name, 0, 0, 0), slices_from_buffer)
+
+        if is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape):
+            array_proxy_name = proxy_key[0]
+            proxy_array_part = proxy_key[1:]
+            
+            pos_in_buffer, slices_from_buffer  = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
+            return (get_func, (buffer_node_name, 0, 0, 0), slices_from_buffer)
+        else:
+            return val
 
     for k in list(rechunk_graph.keys()):
         if k in dependent_tasks:
             key_name = k[0]
             val = rechunk_graph[k]
             if 'rechunk-merge' in key_name:
-                graph, new_val = replace_rechunk_merge(graph, val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+                graph, new_val = replace_rechunk_merge(graph, load, val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
             elif 'rechunk-split' in key_name:
-                new_val = replace_rechunk_split(val, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+                new_val = replace_rechunk_split(val, load, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
             rechunk_graph[k] = new_val
 
     return graph, rechunk_graph
 
 
-def update_io_tasks_getitem(getitem_graph, buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape):
+def is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape):
+    part = proxy_key[1:]
+    if not 'array' in proxy_key[0]:
+        return False
+    shape = original_array_blocks_shape[array_to_original[proxy_key[0]]]
+    num_part = _3d_to_numeric_pos(part, shape, order='C')
+    if num_part in load:
+        return True 
+    else:
+        return False
+
+
+def update_io_tasks_getitem(getitem_graph, load, buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape):
     for k in list(getitem_graph.keys()):
         if k in dependent_tasks:
             val = getitem_graph[k]
             get_func, proxy_key, slices = val
-            pos_in_buffer, slices_from_buffer = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
-            new_val = (get_func, (buffer_node_name, 0, 0, 0), slices_from_buffer)
-            getitem_graph[k] = new_val   
+            
+            if is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape):
+                pos_in_buffer, slices_from_buffer = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
+                new_val = (get_func, (buffer_node_name, 0, 0, 0), slices_from_buffer)
+                getitem_graph[k] = new_val   
     return getitem_graph
 
 
-def recursive_search_and_update(graph, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
+def recursive_search_and_update(graph, load, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
     if not isinstance(_list[0], tuple):
         for i in range(len(_list)):
             sublist = _list[i] 
-            graph, sublist = recursive_search_and_update(graph, sublist, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+            graph, sublist = recursive_search_and_update(graph, load, sublist, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
             _list[i] = sublist
     else:
         for i in range(len(_list)):
             target_key = _list[i]
-            if 'array-' in target_key[0]:
+            if is_in_load(target_key, load, array_to_original, original_array_blocks_shape):
                 getitem_task_key, graph = add_getitem_task_in_graph(graph, buffer_node_name, target_key, array_to_original, original_array_chunks, original_array_blocks_shape)
                 _list[i] = getitem_task_key
     return graph, _list
@@ -282,3 +304,37 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     return pos_in_buffer, (slice(start[0], stop[0], None),
                             slice(start[1], stop[1], None),
                             slice(start[2], stop[2], None))
+
+
+def numeric_to_3d_pos(numeric_pos, shape, order):
+    if order == 'F':  
+        nb_blocks_per_row = shape[0]
+        nb_blocks_per_slice = shape[0] * shape[1]
+    elif order == 'C':
+        nb_blocks_per_row = shape[2]
+        nb_blocks_per_slice = shape[1] * shape[2]
+    else:
+        raise ValueError("unsupported")
+    
+    i = math.floor(numeric_pos / nb_blocks_per_slice)
+    numeric_pos -= i * nb_blocks_per_slice
+    j = math.floor(numeric_pos / nb_blocks_per_row)
+    numeric_pos -= j * nb_blocks_per_row
+    k = numeric_pos
+    return (i, j, k)
+
+
+def _3d_to_numeric_pos(_3d_pos, shape, order):
+    """
+    in C order for example, should be ((_3d_pos[0]-1) * nb_blocks_per_slice) 
+    but as we start at 0 we can keep (_3d_pos[0] * nb_blocks_per_slice)
+    """
+    if order == 'F':  
+        nb_blocks_per_row = shape[0]
+        nb_blocks_per_slice = shape[0] * shape[1]
+    elif order == 'C':
+        nb_blocks_per_row = shape[2]
+        nb_blocks_per_slice = shape[1] * shape[2]
+    else:
+        raise ValueError("unsupported")
+    return (_3d_pos[0] * nb_blocks_per_slice) + (_3d_pos[1] * nb_blocks_per_row) + _3d_pos[2] 

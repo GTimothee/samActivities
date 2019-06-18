@@ -1,29 +1,8 @@
 import sys
-
-sys.path.insert(0,'/home/user/Documents/workspace/projects/dask') # custom dask
-sys.path.insert(1,'/home/user/Documents/workspace/projects/samActivities/tests') 
-sys.path.insert(2,'/home/user/Documents/workspace/projects/samActivities/tests/optimize_io')
-sys.path.insert(3,'/home/user/Documents/workspace/projects/samActivities/experience3')
-
-import dask
-import dask.array as da
-
+sys.path.insert(2,'/home/user/Documents/workspace/projects/samActivities/tests/')
 import optimize_io
-from optimize_io.get_dicts import *
-
-from tests_utils import *
-
-import experience3
-
-import time, os
-import numpy as np
-import math
-import h5py
-
-
-"""file_path = "/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/sample.hdf5"
-    arr = get_dask_array_from_hdf5(file_path)"""
-
+from optimize_io import get_dicts 
+from get_dicts import *
 
 def test_get_arrays_dictionaries():
     graph = {'rechunk-merge-bcfb966a39aa5079f6457f1530dd85df': get_rechunk_dict_without_proxy_array_sample(),
