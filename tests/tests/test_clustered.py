@@ -2,6 +2,12 @@
 from optimize_io.clustered import *
 
 
+import utils
+from utils import *
+
+import sys
+
+
 def test_convert_proxy_to_buffer_slices():
     proxy_key = ("array-645364531", 1, 1, 0)
     merged_task_name = "buffer-645136513-5-13"
@@ -9,7 +15,7 @@ def test_convert_proxy_to_buffer_slices():
     array_to_original = {"array-645364531": "array-original-645364531"}
     original_array_chunks = {"array-original-645364531": (10,20,30)}
     original_array_blocks_shape = {"array-original-645364531": (5, 3, 2)}
-    result_slices = convert_proxy_to_buffer_slices(proxy_key, merged_task_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
+    pos_in_buffer, result_slices = convert_proxy_to_buffer_slices(proxy_key, merged_task_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
     
     """
     0,0,0 = 0
@@ -64,6 +70,7 @@ def test_add_getitem_task_in_graph():
         getitem, buffer_key, slices_from_buffer = buffer_proxy_subtask_val
     except:
         print("error in", sys._getframe().f_code.co_name)
+        print("try failed")
         print(graph)
         return
 
@@ -79,7 +86,11 @@ def test_add_getitem_task_in_graph():
         error = True
     if error:
         print("error in", sys._getframe().f_code.co_name)
-        print(graph)
+        print("checks failed")
+        print("pos_in_buffer", pos_in_buffer)
+        print("buffer_key[0]", buffer_key[0])
+        print("buffer_proxy_name", buffer_proxy_name)
+        print("slices_from_buffer", slices_from_buffer)
         return
     print('success')
 
@@ -98,7 +109,12 @@ def test_recursive_search_and_update():
              [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 5), ("array-645364531", 3, 1, 1)],
              [('rechunk-split-7c9f5c6cedeb992c5f39c40adfae384b', 6), ("array-645364531", 3, 1, 2)]]]
 
-    graph, _list = recursive_search_and_update(graph, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
+
+    load = [(2,0,0),(1,2,0),(2,2,2),(2,1,1),(3,1,1),(3,1,2)]
+    shape = original_array_blocks_shape["array-original-645364531"]
+    load = [_3d_to_numeric_pos(l, shape, order='C') for l in load]
+    load = sorted(load)
+    graph, _list = recursive_search_and_update(graph, load, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
     
     slices_list = [("array-645364531", 2, 0, 0), ("array-645364531", 1, 2, 0), ("array-645364531", 2, 2, 2), ("array-645364531", 2, 1, 1), ("array-645364531", 3, 1, 1), ("array-645364531", 3, 1, 2)]
     buffer_pos_list = list()
@@ -135,8 +151,12 @@ def test_update_io_tasks_getitem():
                        ('getitem-c6555b775be6a9d771866321a0d38252', 0, 0, 4),
                        ('getitem-c6555b775be6a9d771866321a0d38252', 0, 0, 5)]
     
-    
-    getitem_graph = update_io_tasks_getitem(getitem_graph, buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape)
+    load = [(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,5)]
+    shape = original_array_blocks_shape["array-original-645364531"]
+    load = [_3d_to_numeric_pos(l, shape, order='C') for l in load]
+    load = sorted(load)
+
+    getitem_graph = update_io_tasks_getitem(getitem_graph, load, buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape)
 
     dims = (10, 20, 30)
     expected_slices = [(0,0,0), (0,0,1), (0,1,0), (0,1,1), (0,2,0), (0,2,1)]
@@ -190,6 +210,11 @@ def test_update_io_tasks_rechunk():
                         ('rechunk-split-a168f56ba79513b9ed87b2f22dd07458', 10),
                         ('rechunk-merge-a168f56ba79513b9ed87b2f22dd07458', 0, 0, 0)]
 
+    load = [(0,0,0), (0,0,3), (0,1,3), (0,2,0), (0,2,1), (0,2,2), (0,0,1), (0,0,2), (0,1,0), (0,1,1), (0,1,2)]
+    shape = original_array_blocks_shape["array-original-645364531"]
+    load = [_3d_to_numeric_pos(l, shape, order='C') for l in load]
+    load = sorted(load)
+
     #prepare expected results for merge
     rechunk_targets = [(0,0,0),(0,0,1),(0,0,2),(0,1,0),(0,1,1),(0,1,2)]
     slices_in_buffer = (slice(None, None, None), slice(None, None, None), slice(None, None, None))
@@ -203,7 +228,11 @@ def test_update_io_tasks_rechunk():
         rechunk_targets[i] = pos_in_buffer
 
     # compute result
-    graph, rechunk_graph = update_io_tasks_rechunk(dict(), rechunk_graph, 
+    rechunk_key = 'rechunk-merge-a168f56ba79513b9ed87b2f22dd07458'
+    graph = dict()
+    graph[rechunk_key] = rechunk_graph
+    graph = update_io_tasks_rechunk(graph, rechunk_key, 
+                                            load,
                                             dependent_tasks,
                                             buffer_node_name,
                                             array_to_original,
@@ -266,18 +295,24 @@ def test_update_io_tasks():
         'rechunk-merge-a168f56ba79513b9ed87b2f22dd07458': rechunk_d
     }
 
-    try:
-        graph = update_io_tasks(graph, 
-                            deps_dict, 
-                            proxy_array_name, 
-                            array_to_original, 
-                            original_array_chunks, 
-                            original_array_blocks_shape, 
-                            buffer_node_name)
+    load = [(0,0,0), (0,0,3), (0,1,3), (0,2,0), (0,2,1), (0,2,2), (0,0,1), (0,0,2), (0,1,0), (0,1,1), (0,1,2)] + [(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,5)]
+    shape = original_array_blocks_shape["array-original-645364531"]
+    load = [_3d_to_numeric_pos(l, shape, order='C') for l in load]
+    load = sorted(list(set(load)))
 
-    except:
+    #try:
+    graph = update_io_tasks(graph, 
+                        load, 
+                        deps_dict, 
+                        proxy_array_name, 
+                        array_to_original, 
+                        original_array_chunks, 
+                        original_array_blocks_shape, 
+                        buffer_node_name)
+
+    """except:
         print("error in", sys._getframe().f_code.co_name)
-        return 
+        return """
 
     # printer
     """for k, v in graph.items():
@@ -320,4 +355,37 @@ def test_create_buffer_node():
                 print("error in", sys._getframe().f_code.co_name)
                 return
 
+    print("success")
+
+
+def test_create_buffers():
+    proxy_array_name = 'array-6f870a321e8529128cb9bb82b8573db5'
+    original_array_name = "array-original-645364531"
+    array_to_original = {proxy_array_name: original_array_name}
+    original_array_chunks = {original_array_name: (10, 20, 30)}
+    original_array_blocks_shape = {original_array_name: (5, 3, 2)}
+    slices_list = [1,2,3,5,6,7,10,11]
+    buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=8)
+    print(buffers)
+
+def test_is_in_load():
+    proxy_array_name = 'array-6f870a321e8529128cb9bb82b8573db5'
+    original_array_name = "array-original-645364531"
+    array_to_original = {proxy_array_name: original_array_name}
+    original_array_chunks = {original_array_name: (10, 20, 30)}
+    original_array_blocks_shape = {original_array_name: (5, 3, 2)}
+    load = [1,2,3]
+
+    proxy_key = (proxy_array_name, 0, 0, 1)
+    result = is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape)
+    if result != True:
+        print("error in", sys._getframe().f_code.co_name)
+        return 
+
+    proxy_key = (proxy_array_name, 0, 2, 1)
+    result = is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape)
+    if result != False:
+        print("error in", sys._getframe().f_code.co_name)
+        return 
+    
     print("success")

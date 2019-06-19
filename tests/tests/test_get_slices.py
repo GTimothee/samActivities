@@ -1,7 +1,8 @@
 
 from optimize_io.get_slices import *
 
-
+import utils
+from utils import *
 
 # TODO: verify deps_dict for all tests
 

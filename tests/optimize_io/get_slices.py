@@ -16,7 +16,9 @@ def get_slices_from_dask_graph(graph):
         
     if 'getitem' in list(keys_dict.keys()):
         getitem_keys = keys_dict['getitem']
+
         s2, d2 = get_slices_from_getitem_keys(graph, getitem_keys)
+        
         slices_dict.update(s2)
         deps_dict.update(d2)
 
@@ -27,12 +29,14 @@ def get_slices_from_dask_graph(graph):
 def get_slices_from_rechunk_keys(graph, rechunk_keys):
     global_slices_dict = dict()
     global_deps_dict = dict()
+
     for rechunk_key in rechunk_keys:
         rechunk_graph = graph[rechunk_key]
         split_keys, merge_keys = get_rechunk_subkeys(rechunk_graph)
         local_slices_dict, local_deps_dict = get_slices_from_rechunk_subkeys(rechunk_graph, split_keys, merge_keys)
         global_slices_dict.update(local_slices_dict)
         global_deps_dict.update(local_deps_dict)
+        
     return global_slices_dict, global_deps_dict
 
 
@@ -42,8 +46,20 @@ def get_slices_from_getitem_keys(graph, getitem_keys):
     for getitem_key in getitem_keys:
         getitem_graph = graph[getitem_key]
         local_slices_dict, local_deps_dict = get_slices_from_getitem_subkeys(getitem_graph)
-        global_slices_dict.update(local_slices_dict)
-        global_deps_dict.update(local_deps_dict)
+        
+        for k, v in local_slices_dict.items():
+            if not k in list(global_slices_dict.keys()):
+                global_slices_dict.update(local_slices_dict)
+            else:
+                global_slices_dict[k] = global_slices_dict[k] + local_slices_dict[k]
+
+        for k, v in local_deps_dict.items():
+            if not k in list(global_deps_dict.keys()):
+                global_deps_dict.update(local_deps_dict)
+            else:
+                global_deps_dict[k] = global_deps_dict[k] + local_deps_dict[k]
+
+
     return global_slices_dict, global_deps_dict
 
 
@@ -51,6 +67,7 @@ def get_slices_from_getitem_keys(graph, getitem_keys):
 def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys):
 
     def get_slices_from_splits(split_keys, slices_dict, deps_dict):
+        
         for split_key in split_keys:
             split_value = rechunk_merge_graph[split_key]
             _, source_key, slices = split_value
@@ -73,6 +90,7 @@ def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
     slices_dict = dict()
     deps_dict = dict()
     slices_dict, deps_dict = get_slices_from_splits(split_keys, slices_dict, deps_dict)
+
     slices_dict, deps_dict = get_slices_from_merges(merge_keys, slices_dict, deps_dict)
     return slices_dict, deps_dict
 
@@ -80,9 +98,12 @@ def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
 def get_slices_from_getitem_subkeys(getitem_graph):
     slices_dict = dict()
     deps_dict = dict()
+
     for k, v in getitem_graph.items():
+        
         f, source_key, s = v 
-        slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, source_key, k)
+        if isinstance(k[0], str) and "getitem" in k[0]:
+            slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, source_key, k)
     return slices_dict, deps_dict
 
 
@@ -95,6 +116,9 @@ def test_source_key(slices_dict, deps_dict, source_key, dependent_key):
         raise ValueError("not enough elements to unpack in", source_key)
     if not isinstance(source_key, tuple):
         raise ValueError("expected a tuple:", source_key)
+    
+
+
     source, s1, s2, s3 = source_key
     
     if not isinstance(source, str):
@@ -129,6 +153,7 @@ def get_keys_from_graph(graph, printer=False):
 
 # utility
 def add_or_create_to_list_dict(d, k, v):
+   
     if k not in list(d.keys()):
         d[k] = [v]
     else:

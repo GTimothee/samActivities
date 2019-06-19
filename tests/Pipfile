@@ -10,6 +10,7 @@ dask = "*"
 numpy = "*"
 toolz = "*"
 h5py = "*"
+graphviz = "*"
 
 [requires]
 python_version = "3.7"
