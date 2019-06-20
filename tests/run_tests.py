@@ -60,6 +60,4 @@ def test_main_funcs():
     test_main()
     test_in_custom_dask()
 
-#test_main_funcs()
-
-test_recursive_search_and_update()
+graph_verifier()

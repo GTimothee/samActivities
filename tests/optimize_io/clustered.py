@@ -19,16 +19,13 @@ __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node",
 
 def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
     for proxy_array_name, slices_list in slices_dict.items(): 
-  
         buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape)
   
         for load_index in range(len(buffers)):
             load = buffers[load_index]
- 
-            if len(load) > 1:
-                graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks)
-            
-                graph = update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
+            # if len(load) > 1: TODO: remettre ça, l'enlever sert juste à voir (dans la viz) si le buffering marche 
+            graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks)
+            graph = update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
     return graph
 
 
@@ -167,7 +164,7 @@ def update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original,
         rechunk_keys = keys_dict['rechunk-merge']
         for key in rechunk_keys:
             graph = update_io_tasks_rechunk(graph, key, load, dependent_tasks, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
-
+    
     if 'getitem' in list(keys_dict.keys()):
         getitem_keys = keys_dict['getitem']
         for key in getitem_keys:
@@ -211,12 +208,12 @@ def update_io_tasks_rechunk(graph, rechunk_key, load, dependent_tasks, buffer_no
 
 
 def is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape):
-    
     part = proxy_key[1:]
-    if not 'array' in proxy_key[0]:
+    proxy_name = proxy_key[0]
+    if not 'array' in proxy_name:
         return False
 
-    shape = original_array_blocks_shape[array_to_original[proxy_key[0]]]
+    shape = original_array_blocks_shape[array_to_original[proxy_name]]
     num_part = _3d_to_numeric_pos(part, shape, order='C')
 
     if num_part in load:
@@ -226,8 +223,6 @@ def is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape):
 
 
 def update_io_tasks_getitem(getitem_graph, load, buffer_node_name, dependent_tasks, array_to_original, original_array_chunks, original_array_blocks_shape):
-    
-    
     for k in list(getitem_graph.keys()):
         if k in dependent_tasks:
             val = getitem_graph[k]
@@ -237,12 +232,11 @@ def update_io_tasks_getitem(getitem_graph, load, buffer_node_name, dependent_tas
                 pos_in_buffer, slices_from_buffer = convert_proxy_to_buffer_slices(proxy_key, buffer_node_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape)
                 new_val = (get_func, (buffer_node_name, 0, 0, 0), slices_from_buffer)
                 getitem_graph[k] = new_val  
-
     return getitem_graph
 
 
 def recursive_search_and_update(graph, load, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape):
-    if not isinstance(_list[0], tuple):
+    if not isinstance(_list[0], tuple): # if it is not a list of targets
         for i in range(len(_list)):
             sublist = _list[i] 
             graph, sublist = recursive_search_and_update(graph, load, sublist, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
@@ -253,6 +247,7 @@ def recursive_search_and_update(graph, load, _list, buffer_node_name, array_to_o
             if is_in_load(target_key, load, array_to_original, original_array_blocks_shape):
                 getitem_task_key, graph = add_getitem_task_in_graph(graph, buffer_node_name, target_key, array_to_original, original_array_chunks, original_array_blocks_shape)
                 _list[i] = getitem_task_key
+  
     return graph, _list
 
 
@@ -354,4 +349,4 @@ def _3d_to_numeric_pos(_3d_pos, shape, order):
     else:
         raise ValueError("unsupported")
 
-    return (_3d_pos[0] * nb_blocks_per_slice) + (_3d_pos[1] * nb_blocks_per_row) + _3d_pos[2] #+ 1
+    return (_3d_pos[0] * nb_blocks_per_slice) + (_3d_pos[1] * nb_blocks_per_row) + _3d_pos[2] 

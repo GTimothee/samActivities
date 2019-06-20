@@ -74,8 +74,31 @@ def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
             slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, source_key, split_key)
         return slices_dict, deps_dict
 
+    
+    def recursive_search(_list, merge_key, slices_dict, deps_dict):
+        if not isinstance(_list[0], tuple): # if it is not a list of targets
+            for i in range(len(_list)):
+                sublist = _list[i] 
+                slices_dict, deps_dict = recursive_search(sublist, merge_key, slices_dict, deps_dict)
+        else:
+            for i in range(len(_list)):
+                target_key = _list[i] 
+                if 'array' in target_key[0]:
+                    slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, target_key, merge_key)
+    
+        return slices_dict, deps_dict
+
+
+    def get_slices_from_merges2(rechunk_merge_graph, merge_keys, slices_dict, deps_dict):
+        for merge_key in merge_keys:
+            val = rechunk_merge_graph[merge_key]
+            f, concat_list = val
+            slices_dict, deps_dict = recursive_search(concat_list, merge_key, slices_dict, deps_dict)
+        return slices_dict, deps_dict
+
+
     # TODO: make better
-    def get_slices_from_merges(merge_keys, slices_dict, deps_dict):
+    """def get_slices_from_merges(merge_keys, slices_dict, deps_dict):
         for merge_key in merge_keys:
             merge_value = rechunk_merge_graph[merge_key]
             _, concat_list = merge_value
@@ -85,13 +108,13 @@ def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
                 for source_key in block:
                     if len(source_key) == 4:
                         slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, source_key, merge_key)
-        return slices_dict, deps_dict
+        return slices_dict, deps_dict"""
 
     slices_dict = dict()
     deps_dict = dict()
     slices_dict, deps_dict = get_slices_from_splits(split_keys, slices_dict, deps_dict)
 
-    slices_dict, deps_dict = get_slices_from_merges(merge_keys, slices_dict, deps_dict)
+    slices_dict, deps_dict = get_slices_from_merges2(rechunk_merge_graph, merge_keys, slices_dict, deps_dict)
     return slices_dict, deps_dict
 
 
@@ -116,8 +139,6 @@ def test_source_key(slices_dict, deps_dict, source_key, dependent_key):
         raise ValueError("not enough elements to unpack in", source_key)
     if not isinstance(source_key, tuple):
         raise ValueError("expected a tuple:", source_key)
-    
-
 
     source, s1, s2, s3 = source_key
     

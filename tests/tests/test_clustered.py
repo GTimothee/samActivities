@@ -114,8 +114,11 @@ def test_recursive_search_and_update():
     shape = original_array_blocks_shape["array-original-645364531"]
     load = [_3d_to_numeric_pos(l, shape, order='C') for l in load]
     load = sorted(load)
+
+
     graph, _list = recursive_search_and_update(graph, load, _list, buffer_node_name, array_to_original, original_array_chunks, original_array_blocks_shape)
     
+
     slices_list = [("array-645364531", 2, 0, 0), ("array-645364531", 1, 2, 0), ("array-645364531", 2, 2, 2), ("array-645364531", 2, 1, 1), ("array-645364531", 3, 1, 1), ("array-645364531", 3, 1, 2)]
     buffer_pos_list = list()
     for i, s in enumerate(slices_list):
@@ -131,7 +134,7 @@ def test_recursive_search_and_update():
     
     if _list != expected_list:
         print("error in", sys._getframe().f_code.co_name)
-        print(_list, "expected", _list)
+        print(_list, "\n\nexpected\n\n", expected_list)
         return
     
     print("success")
@@ -373,16 +376,16 @@ def test_is_in_load():
     original_array_name = "array-original-645364531"
     array_to_original = {proxy_array_name: original_array_name}
     original_array_chunks = {original_array_name: (10, 20, 30)}
-    original_array_blocks_shape = {original_array_name: (5, 3, 2)}
-    load = [1,2,3]
+    original_array_blocks_shape = {original_array_name: (7, 5, 7)}
+    load = range(6,36)
 
-    proxy_key = (proxy_array_name, 0, 0, 1)
+    proxy_key = (proxy_array_name, 0, 2, 2)
     result = is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape)
     if result != True:
         print("error in", sys._getframe().f_code.co_name)
         return 
 
-    proxy_key = (proxy_array_name, 0, 2, 1)
+    proxy_key = (proxy_array_name, 1, 0, 1)
     result = is_in_load(proxy_key, load, array_to_original, original_array_blocks_shape)
     if result != False:
         print("error in", sys._getframe().f_code.co_name)
