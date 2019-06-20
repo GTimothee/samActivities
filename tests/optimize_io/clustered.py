@@ -14,7 +14,7 @@ from operator import getitem
 __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node", 
            "update_io_tasks", "update_io_tasks_rechunk", "update_io_tasks_getitem", 
            "add_getitem_task_in_graph", "recursive_search_and_update", "convert_proxy_to_buffer_slices",
-           "numeric_to_3d_pos", "_3d_to_numeric_pos", "is_in_load")
+           "numeric_to_3d_pos", "_3d_to_numeric_pos", "is_in_load", "get_buffer_slices_from_original_array")
 
 
 def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
@@ -109,32 +109,51 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
     return list_of_lists
 
 
-def create_buffer_node(dask_graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks):
+def get_buffer_slices_from_original_array(load, shape, original_array_chunk):
     def get_coords_in_image(block_coord, original_array_chunk):
         return tuple([block_coord[i] * original_array_chunk[i] for i in range(3)])
 
-    def get_buffer_slices_from_original_array(load, shape, original_array_chunk):
-        _min = [None, None, None]
-        _max = [None, None, None]
-        for block_index_num in range(load[0], load[-1] + 1):
-            block_index_3d = numeric_to_3d_pos(block_index_num, shape, order='C') 
-            for j in range(3):
-                if _max[j] == None:
-                    _max[j] = block_index_3d[j]
-                if _min[j] == None:
-                    _min[j] = block_index_3d[j]
-                if block_index_3d[j] > _max[j]:
-                    _max[j] = block_index_3d[j]
-                if block_index_3d[j] < _min[j]:
-                    _min[j] = block_index_3d[j]
+    """_min = [None, None, None]
+    _max = [None, None, None]
+    for block_index_num in range(load[0], load[-1] + 1):
+        block_index_3d = numeric_to_3d_pos(block_index_num, shape, order='C') 
+        for j in range(3):
+            if _max[j] == None:
+                _max[j] = block_index_3d[j]
+            if _min[j] == None:
+                _min[j] = block_index_3d[j]
+            if block_index_3d[j] > _max[j]:
+                _max[j] = block_index_3d[j]
+            if block_index_3d[j] < _min[j]:
+                _min[j] = block_index_3d[j]
 
-        start = get_coords_in_image(tuple(_min), original_array_chunk)
-        end = tuple([x + 1 for x in tuple(_max)])
-        end = get_coords_in_image(end, original_array_chunk)
-        return (slice(start[0], end[0], None),
-                slice(start[1], end[1], None),
-                slice(start[2], end[2], None))
-    
+    start = get_coords_in_image(tuple(_min), original_array_chunk)
+    end = tuple([x + 1 for x in tuple(_max)])
+    end = get_coords_in_image(end, original_array_chunk)
+    return (slice(start[0], end[0], None),
+            slice(start[1], end[1], None),
+            slice(start[2], end[2], None))"""
+
+
+
+    start = min(load)
+    end = max(load) + 1
+
+    start = block_index_3d = numeric_to_3d_pos(start, shape, order='C') 
+    end = block_index_3d = numeric_to_3d_pos(end, shape, order='C') 
+
+    mini = [min(s, e) for s, e in zip(start, end)]
+    maxi = [max(s, e) for s, e in zip(start, end)]
+
+    mini = [e * d for e, d in zip(mini, original_array_chunk)]
+    maxi = [e * d for e, d in zip(maxi, original_array_chunk)]
+
+    return (slice(mini[0], maxi[0], None),
+            slice(mini[1], maxi[1], None),
+            slice(mini[2], maxi[2], None))
+
+
+def create_buffer_node(dask_graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks):
     # get new key
     merged_array_proxy_name = 'merged-part-' + str(load[0]) + '-' + str(load[-1])
     key = (merged_array_proxy_name, 0, 0, 0)
@@ -278,7 +297,7 @@ def add_getitem_task_in_graph(graph, buffer_node_name, proxy_key, array_to_origi
 
 
 def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_to_original, original_array_chunks, original_array_blocks_shape):
-    """ Get the slices of the targetted block in the buffer, from the index of this block in the proxy array. 
+    """ Get the slices of the targeted block in the buffer, from the index of this block in the proxy array. 
     + apply the slices 
     """
     proxy_array_name = proxy_key[0]

@@ -60,4 +60,5 @@ def test_main_funcs():
     test_main()
     test_in_custom_dask()
 
-graph_verifier()
+#test_get_buffer_slices_from_original_array()
+test_sum()

@@ -8,6 +8,29 @@ from utils import *
 import sys
 
 
+def test_get_buffer_slices_from_original_array():
+    load = [4, 5, 6, 7, 8] # TODO verify que cest bien un block (normalement oui)
+    shape = (5, 3, 2)
+    original_array_chunk = (10, 20, 30)
+
+    """
+    4e = (0, 2, 0) 
+    8e = (1, 1, 0)  la fin du 8e est le debut du 9e => 9e = (1, 1, 1)
+
+    mins= 0, 1, 0 => (0, 20, 0)
+    maxs = 1, 2, 1 => (10, 40, 30)
+    d'où slices = (0, 10, None), (20, 40, None), (0, 30, None)
+    """
+
+    expected_slices = (slice(0, 10, None), slice(20, 40, None), slice(0, 30, None))
+    slices = get_buffer_slices_from_original_array(load, shape, original_array_chunk)
+    if slices != expected_slices:
+        print("error in", sys._getframe().f_code.co_name)
+        print("got", slices, ", expected", expected_slices)    
+        return
+    print("success")
+
+
 def test_convert_proxy_to_buffer_slices():
     proxy_key = ("array-645364531", 1, 1, 0)
     merged_task_name = "buffer-645136513-5-13"
