@@ -385,11 +385,31 @@ def test_create_buffers():
     proxy_array_name = 'array-6f870a321e8529128cb9bb82b8573db5'
     original_array_name = "array-original-645364531"
     array_to_original = {proxy_array_name: original_array_name}
-    original_array_chunks = {original_array_name: (10, 20, 30)}
-    original_array_blocks_shape = {original_array_name: (5, 3, 2)}
-    slices_list = [1,2,3,5,6,7,10,11]
+    original_array_chunks = {original_array_name: (200, 300, 230)}
+    original_array_blocks_shape = {original_array_name: (7, 5, 7)}
+    slices_list = [0,1,2,3,4,5,12,13,14,17,20,21,22,23]
+
+    """
+    row size = 7 blocks
+    slices size = 35 blocks
+
+    shape = (200,300,230)
+    row byte size = (200*300*230) * 7 blocks * 4 bytes= 13800000 * 7 * 4 = 386 400 000
+    slice byte size = 386 400 000 * 5 = 1 932 000 000
+    default mem = 1 000 000 000
+
+    => strategy: buffer=row_size max => 7 blocks contiguous max
+    rows: 0-6 7-13 14-20 21-27
+    """
+    expected = [[0,1,2,3,4,5], [12,13,14], [17], [20,21,22], [23]]
+
     buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=8)
-    print(buffers)
+    if buffers != expected:
+        print("error in", sys._getframe().f_code.co_name)
+        print("buffer'\n", buffers, "\n\n")
+        print("expected\n", expected)
+        return 
+    print("success")
 
 def test_is_in_load():
     proxy_array_name = 'array-6f870a321e8529128cb9bb82b8573db5'

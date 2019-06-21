@@ -52,7 +52,7 @@ def test_clustered():
     test_update_io_tasks_rechunk()
     test_update_io_tasks()
     test_create_buffer_node()
-    #test_create_buffers()
+    test_create_buffers()
     test_is_in_load()
 
 def test_main_funcs():
@@ -61,6 +61,8 @@ def test_main_funcs():
     test_in_custom_dask()
 
 #test_get_buffer_slices_from_original_array()
-test_convert_proxy_to_buffer_slices()
+#test_convert_proxy_to_buffer_slices()
 #graph_verifier()
-#test_sum()
+test_sum()
+#test_create_buffers()
+#test_main()

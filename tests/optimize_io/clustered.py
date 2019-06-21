@@ -29,12 +29,12 @@ def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, o
     return graph
 
 
-def create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=8):
+def create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=4):
     """ current strategy : entire blocks
     # TODO support more strategies
     """
 
-    def get_buffer_mem_size(config):
+    def get_buffer_mem_size(default_memory=1000000000):
         try:
             optimization = config.get("io-optimizer")
             try:
@@ -42,9 +42,9 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
             except:
                 print("missing configuration information memory_available")
                 print("using default configuration: 1 gigabytes")
-                return 1000000000
+                return default_memory
         except:
-            raise ValueError("io-optimizer not enabled")
+            return default_memory
 
 
     def get_load_strategy(buffer_mem_size, block_shape, original_array_blocks_shape, nb_bytes_per_val):
@@ -74,9 +74,9 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
             """
             if not prev_i:
                 return False 
-            elif strategy == "blocks" and prev_i % original_array_blocks_shape[2] == 0:
+            elif strategy == "blocks" and (prev_i % original_array_blocks_shape[2] -1) == 0:
                 return True 
-            elif strategy == "rows" and prev_i % (original_array_blocks_shape[1] * original_array_blocks_shape[1]) == 0:
+            elif (strategy == "rows") and (prev_i > original_array_blocks_shape[2]) and (prev_i % original_array_blocks_shape[2] -1) == 0:
                 return True 
             else:
                 return False
@@ -95,9 +95,12 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
             
     original_array_name = array_to_original[proxy_array_name]
     original_array_blocks_shape = original_array_blocks_shape[original_array_name]
-    buffer_mem_size = 1000000000 # get_buffer_mem_size(config)
+    buffer_mem_size = get_buffer_mem_size()
     block_shape = original_array_chunks[original_array_name]
     strategy, nb_blocks_per_load = get_load_strategy(buffer_mem_size, block_shape, original_array_blocks_shape, nb_bytes_per_val)
+
+    print("strategy:", strategy)
+    print("nb_blocks_per_load:", nb_blocks_per_load)
 
     list_of_lists, prev_i = new_list(list())
     while len(slices_list) > 0:
@@ -294,6 +297,7 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
 
     pos_in_buffer = [pos_in_buffer[i] * img_chunks_sizes[i] for i in range(3)]
 
+    # add the slices to the starting position
     slices_start = [s.start for s in slices]
     slices_stop = [s.stop for s in slices]
     slices_step = [s.step for s in slices]
@@ -304,6 +308,7 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     slices_start = [a + b for a, b in zip(pos_in_buffer, slices_start)]
     slices_stop = [a + b for a, b in zip(pos_in_buffer, slices_stop)]
 
+    # don't modify the step
     combined_slices = tuple([slice(s, e, step) for s, e, step in zip(slices_start, slices_stop, slices_step)])
 
     return pos_in_buffer, combined_slices

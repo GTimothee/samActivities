@@ -203,22 +203,26 @@ def graph_verifier():
     return
 
 def test_main():
+    """
+    see if it runs
+    """
     data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
     key = "data"
     
-    for i in range(1):
+    for i in range(4):
         arr = get_dask_array_from_hdf5(data_path, key)
         dask_array = logical_chunks_tests(arr, cases[i], number_of_arrays=2)
         graph = dask_array.dask.dicts
-        graph_printer(graph)
         graph = main(graph)
-        graph_printer(graph)
 
     print("success")
     return
 
 
 def test_sum():
+    """
+    see if it returns the good results
+    """
     number_of_arrays = 1
     # custom dask
     import sys, os, time
