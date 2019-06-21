@@ -83,7 +83,7 @@ def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
         else:
             for i in range(len(_list)):
                 target_key = _list[i] 
-                if 'array' in target_key[0]:
+                if 'array' in target_key[0] and not 'array-original' in target_key[0]:
                     slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, target_key, merge_key)
     
         return slices_dict, deps_dict
@@ -144,7 +144,7 @@ def test_source_key(slices_dict, deps_dict, source_key, dependent_key):
     
     if not isinstance(source, str):
         raise ValueError("expected a string:", source)
-    if 'array' in source:
+    if 'array' in source and not 'array-original' in source:
         slices_dict = add_or_create_to_list_dict(slices_dict, source, (s1, s2, s3))
         deps_dict = add_or_create_to_list_dict(deps_dict, source, dependent_key)
     return slices_dict, deps_dict

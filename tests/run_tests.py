@@ -61,4 +61,6 @@ def test_main_funcs():
     test_in_custom_dask()
 
 #test_get_buffer_slices_from_original_array()
-test_sum()
+test_convert_proxy_to_buffer_slices()
+#graph_verifier()
+#test_sum()

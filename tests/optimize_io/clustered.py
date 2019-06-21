@@ -110,32 +110,6 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
 
 
 def get_buffer_slices_from_original_array(load, shape, original_array_chunk):
-    def get_coords_in_image(block_coord, original_array_chunk):
-        return tuple([block_coord[i] * original_array_chunk[i] for i in range(3)])
-
-    """_min = [None, None, None]
-    _max = [None, None, None]
-    for block_index_num in range(load[0], load[-1] + 1):
-        block_index_3d = numeric_to_3d_pos(block_index_num, shape, order='C') 
-        for j in range(3):
-            if _max[j] == None:
-                _max[j] = block_index_3d[j]
-            if _min[j] == None:
-                _min[j] = block_index_3d[j]
-            if block_index_3d[j] > _max[j]:
-                _max[j] = block_index_3d[j]
-            if block_index_3d[j] < _min[j]:
-                _min[j] = block_index_3d[j]
-
-    start = get_coords_in_image(tuple(_min), original_array_chunk)
-    end = tuple([x + 1 for x in tuple(_max)])
-    end = get_coords_in_image(end, original_array_chunk)
-    return (slice(start[0], end[0], None),
-            slice(start[1], end[1], None),
-            slice(start[2], end[2], None))"""
-
-
-
     start = min(load)
     end = max(load) + 1
 
@@ -166,9 +140,7 @@ def create_buffer_node(dask_graph, proxy_array_name, load, array_to_original, or
     shape = original_array_blocks_shape[original_array_name]
     buffer_block_slices = get_buffer_slices_from_original_array(load, shape, original_array_chunk)
     get_func = getitem # get_func = array_proxy_dict[list(array_proxy_dict.keys())[0]][0]
-    value = (get_func, original_array_name, (buffer_block_slices[0], 
-                                             buffer_block_slices[1], 
-                                             buffer_block_slices[2]))
+    value = (get_func, original_array_name, buffer_block_slices)
 
     # add new key/val pair to the dask graph
     dask_graph[merged_array_proxy_name] = {key: value}
@@ -300,8 +272,12 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     """ Get the slices of the targeted block in the buffer, from the index of this block in the proxy array. 
     + apply the slices 
     """
+
+    # get information on the target and its pos
     proxy_array_name = proxy_key[0]
     pos_in_proxy_array = proxy_key[1:]
+    
+    # get dimensions information from utility dicts
     original_array_name = array_to_original[proxy_array_name]
     img_chunks_sizes = original_array_chunks[original_array_name]
     img_nb_blocks_per_dim = original_array_blocks_shape[original_array_name]
@@ -316,24 +292,22 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     num_pos_in_buffer = num_pos_in_proxy - int(num_start_of_buffer)
     pos_in_buffer = numeric_to_3d_pos(num_pos_in_buffer, img_nb_blocks_per_dim, order='C')
 
-    _slice = pos_in_buffer
+    pos_in_buffer = [pos_in_buffer[i] * img_chunks_sizes[i] for i in range(3)]
 
-    start = [None] * 3
-    stop = [None] * 3
-    for i, sl in enumerate(slices):
-        if sl.start != None:
-            start[i] = (_slice[i] * img_chunks_sizes[i]) + sl.start
-        else:
-            start[i] = _slice[i] * img_chunks_sizes[i]
+    slices_start = [s.start for s in slices]
+    slices_stop = [s.stop for s in slices]
+    slices_step = [s.step for s in slices]
 
-        if sl.stop != None:
-            stop[i] = (_slice[i] * img_chunks_sizes[i]) + sl.stop
-        else:
-            stop[i] = (_slice[i] + 1) * img_chunks_sizes[i] 
-            
-    return pos_in_buffer, (slice(start[0], stop[0], None),
-                            slice(start[1], stop[1], None),
-                            slice(start[2], stop[2], None))
+    slices_start = [0 if s == None else s for s in slices_start]
+    slices_stop = [img_chunks_sizes[i] if e == None else e for i, e in enumerate(slices_stop)]
+
+    slices_start = [a + b for a, b in zip(pos_in_buffer, slices_start)]
+    slices_stop = [a + b for a, b in zip(pos_in_buffer, slices_stop)]
+
+    combined_slices = tuple([slice(s, e, step) for s, e, step in zip(slices_start, slices_stop, slices_step)])
+
+    return pos_in_buffer, combined_slices
+
 
 
 def numeric_to_3d_pos(numeric_pos, shape, order):

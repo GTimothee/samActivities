@@ -33,45 +33,53 @@ def test_convert_slices_list_to_numeric_slices():
 
 
 
-def get_slices_dicts_for_verifier(graph):
+def get_slices_dicts_for_verifier(graph, original_array_chunk_shape):
 
-    def apply_slices_on_slices(slices, arr_slices):
-        s1 = [[s.start, s.stop, s.step] for s in slices]
-        s2 = [[s.start, s.stop, s.step] for s in arr_slices]
-        combined_slices = [[0,0,0], [0,0,0], [0,0,0]]
-        for i in range(3):
-            for j in range(3):
-                if s1[i][j] == None and s2[i][j] == None:
-                    combined_slices[i][j] = None 
-                else:
-                    if s1[i][j] == None:
-                        s1[i][j] = 0
-                    if s2[i][j] == None:
-                        s2[i][j] = 0
-                    combined_slices[i][j] = s1[i][j] + s2[i][j]
-        return slice(combined_slices)
+    def apply_slices_on_slices(slices, arr_slices, original_array_chunk_shape):
 
-    def get_slices_dict_getitem(graph, getitem_key, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices):
+        buffer_start = [s.start for s in arr_slices]
+        
+        slices_start = [s.start for s in slices]
+        slices_end = [s.stop for s in slices]
+        slices_step = [s.step for s in slices]
+
+        slices_start = [0 if s == None else s for s in slices_start]
+        slices_end = [original_array_chunk_shape[i] if e == None else e for i, e in enumerate(slices_end)]
+
+        slices_start = [a+b for a, b in zip(buffer_start, slices_start)]
+        slices_end = [a+b for a, b in zip(buffer_start, slices_end)]
+
+        combined_slices = tuple([slice(s, e, step) for s, e, step in zip(slices_start, slices_end, slices_step)])
+
+        if combined_slices == tuple():
+            print("arr_slices", arr_slices)
+            print("slices", slices)
+            print("slices_end", slices_end)
+            print("buffer_start", buffer_start)
+            print("\n\n")
+
+        return combined_slices
+
+    def get_slices_dict_getitem(graph, getitem_key, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices, original_array_chunk_shape):
         slices_dict_getitem = dict()
         graph_getitem = graph[getitem_key]
         for k, v in graph_getitem.items():
             key = v[1]
             slices = v[2]
 
-            if 'array' in key[0]:
+            if 'array' in key[0] and not 'array-original' in key[0]:
                 arr, arr_slices = proxy_array_part_to_orig_array_slices[key]
-                arr_slices = apply_slices_on_slices(slices, arr_slices) # apply first on second
+                arr_slices = apply_slices_on_slices(slices, arr_slices, original_array_chunk_shape) # apply first on second
                 slices_dict_getitem[k] = (arr, arr_slices)
             elif 'merged-part' in key[0]:
                 arr, arr_slices = buffer_part_to_orig_array_slices[key]
-                arr_slices = apply_slices_on_slices(slices, arr_slices) # apply first on second
+                arr_slices = apply_slices_on_slices(slices, arr_slices, original_array_chunk_shape) # apply first on second
                 slices_dict_getitem[k] = (arr, arr_slices)
             else:
                 pass
         return slices_dict_getitem
 
     def get_slices_dict_rechunk(graph, rechunk_key, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices):
-        
 
         def recursive_search(_list, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices):
             new_list = list()
@@ -83,7 +91,7 @@ def get_slices_dicts_for_verifier(graph):
             else:
                 for i in range(len(_list)):
                     target_key = _list[i] 
-                    if 'array' in target_key[0]:
+                    if 'array' in target_key[0] and not 'array-original' in target_key[0]:
                         arr, arr_slices = proxy_array_part_to_orig_array_slices[key]
                         new_list.append((arr, arr_slices))
                     elif 'merged-part' in target_key[0]:
@@ -100,7 +108,7 @@ def get_slices_dicts_for_verifier(graph):
             if 'rechunk-split' in k[0]: # same as getitem
                 key = v[1]
                 slices = v[2]
-                if 'array' in key[0]:
+                if 'array' in key[0] and not 'array-original' in key[0]:
                     arr, arr_slices = proxy_array_part_to_orig_array_slices[key]
                     arr_slices = apply_slices_on_slices(slices, arr_slices) # apply first on second
                     slices_dict_rechunk[k] = (arr, arr_slices)
@@ -136,19 +144,19 @@ def get_slices_dicts_for_verifier(graph):
     slices_dict_getitem_global = dict()
     for k, v in graph.items():
         if 'getitem' in k: 
-            slices_dict_getitem = get_slices_dict_getitem(graph, k, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices)
+            slices_dict_getitem = get_slices_dict_getitem(graph, k, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices, original_array_chunk_shape)
             for k2,v2 in slices_dict_getitem.items():
                 if k2 in list(slices_dict_getitem_global.keys()):
                     slices_dict_getitem_global[k2] = slices_dict_getitem_global[k2] + v2
                 else:
                     slices_dict_getitem_global[k2] = v2
         if 'rechunk-merge' in k:
-            pass #slices_dict_rechunk = get_slices_dict_rechunk(graph, k, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices)
+            slices_dict_rechunk = get_slices_dict_rechunk(graph, k, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices)
             
-    
-    return slices_dict_getitem_global #, slices_dict_rechunk
+    return slices_dict_getitem_global, slices_dict_rechunk
 
 
+#TODO: do not use until verification 
 def graph_verifier():
     # get data
     data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
@@ -156,31 +164,40 @@ def graph_verifier():
     arr = get_dask_array_from_hdf5(data_path, key)
     dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=2)
 
-    # get first graph
-    graph1 = dask_array.dask.dicts
     
-    # evaluate the diff
-    slices_dict_getitem1 = copy.deepcopy(get_slices_dicts_for_verifier(graph1))
+    # first graph
+    graph1 = dask_array.dask.dicts
+    original_array_chunk_shape = (220, 242, 200)
+    slices_dict_getitem1, slices_dict_rechunk1 = copy.deepcopy(get_slices_dicts_for_verifier(graph1, original_array_chunk_shape))
 
-    # modify it to get second graph
+    # second graph
     graph2 = main(graph1)
-    slices_dict_getitem2 = get_slices_dicts_for_verifier(graph2)
+    original_array_chunk_shape = (6, 1210, 1400)
+    slices_dict_getitem2, slices_dict_rechunk2 = get_slices_dicts_for_verifier(graph2, original_array_chunk_shape)
 
+    print("evaluating getitems")
+    fails = 0
     getitem2_keys = list(slices_dict_getitem2.keys())
     for k, v in slices_dict_getitem1.items():
         if not k in getitem2_keys:
+            fails += 1
             print("not", k, "in getitem2_keys")
         else:
             if v != slices_dict_getitem2[k]:
-                print("\n", v, "became \n", slices_dict_getitem2[k])
+                fails += 1
+                print("\nfailed at", k)
+                print(v[1], "became \n", slices_dict_getitem2[k][1])
 
-    """rechunk2_keys = list(slices_dict_rechunk2.keys())
+    print("encountered", fails, "failures")
+
+    print("evaluating rechunks")
+    rechunk2_keys = list(slices_dict_rechunk2.keys())
     for k, v in slices_dict_rechunk1.items():
         if not k in rechunk2_keys:
-            print("not", k, "in getitem2_keys")
+            print("not", k, "in rechunk2_keys")
         else:
             if v != slices_dict_rechunk2[k]:
-                print(v, "became ", slices_dict_rechunk2[k])"""
+                print(v, "became ", slices_dict_rechunk2[k])
 
     print("end")
     return
@@ -219,12 +236,14 @@ def test_sum():
     dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=1)
     result_non_opti = dask_array.sum()
     print(result_non_opti.compute())
+    #result_non_opti.visualize(filename='./test_non_opti.png', optimize_graph=True)
 
     # opti
     dask.config.set({'optimizations': [optimize_func]})
     arr = get_dask_array_from_hdf5(data_path, key)
     dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=1)
     result_opti = dask_array.sum()
+    #result_opti.visualize(filename='./test_opti.png', optimize_graph=True)
     print(result_opti.compute())
 
 
