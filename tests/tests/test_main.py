@@ -256,7 +256,7 @@ def test_in_custom_dask():
         print(message)
 
         results = list()
-        for case_index in range(1):
+        for case_index in range(4):
             # load array
             data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
             key = "data"

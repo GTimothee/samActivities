@@ -19,20 +19,20 @@ __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node",
 
 def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
     for proxy_array_name, slices_list in slices_dict.items(): 
-        print(slices_list)
+        """print(slices_list)"""
         buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape)
-        print("buffers", buffers)
+        """print("buffers", buffers)"""
         
         for load_index in range(len(buffers)):
             load = buffers[load_index]
-            print("current load", load)
+            """ print("current load", load)"""
             # if len(load) > 1: TODO: remettre ça, l'enlever sert juste à voir (dans la viz) si le buffering marche 
             graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks)
             
-            print("buffer_node_name", buffer_node_name)
-            print("graph[buffer_node_name]", graph[buffer_node_name])
+            """print("buffer_node_name", buffer_node_name)
+            print("graph[buffer_node_name]", graph[buffer_node_name])"""
 
-            sys.exit()
+            #sys.exit()
 
             graph = update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
     return graph
