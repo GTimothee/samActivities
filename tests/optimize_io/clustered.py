@@ -19,12 +19,21 @@ __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node",
 
 def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
     for proxy_array_name, slices_list in slices_dict.items(): 
+        print(slices_list)
         buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape)
-  
+        print("buffers", buffers)
+        
         for load_index in range(len(buffers)):
             load = buffers[load_index]
+            print("current load", load)
             # if len(load) > 1: TODO: remettre ça, l'enlever sert juste à voir (dans la viz) si le buffering marche 
             graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks)
+            
+            print("buffer_node_name", buffer_node_name)
+            print("graph[buffer_node_name]", graph[buffer_node_name])
+
+            sys.exit()
+
             graph = update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
     return graph
 
@@ -72,11 +81,12 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
     def bad_configuration_incoming(prev_i, strategy, original_array_blocks_shape):
             """ to avoid bad configurations in clustered writes
             """
+            
             if not prev_i:
                 return False 
             elif strategy == "blocks" and (prev_i % original_array_blocks_shape[2] -1) == 0:
                 return True 
-            elif (strategy == "rows") and (prev_i > original_array_blocks_shape[2]) and (prev_i % original_array_blocks_shape[2] -1) == 0:
+            elif (strategy == "rows") and (prev_i > 1) and ((prev_i + 1) % original_array_blocks_shape[2]) == 0:
                 return True 
             else:
                 return False
@@ -104,6 +114,7 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
 
     list_of_lists, prev_i = new_list(list())
     while len(slices_list) > 0:
+        # print(list_of_lists)
         next_i = slices_list.pop(0)
         list_of_lists, prev_i = test_if_create_new_load(list_of_lists, prev_i, strategy, original_array_blocks_shape)
         list_of_lists[len(list_of_lists) - 1].append(next_i)
@@ -114,13 +125,32 @@ def create_buffers(slices_list, proxy_array_name, array_to_original, original_ar
 
 def get_buffer_slices_from_original_array(load, shape, original_array_chunk):
     start = min(load)
-    end = max(load) + 1
+    end = max(load)
 
-    start = block_index_3d = numeric_to_3d_pos(start, shape, order='C') 
-    end = block_index_3d = numeric_to_3d_pos(end, shape, order='C') 
+    all_block_num_indexes = range(start, end + 1)
+    all_block_3d_indexes = [numeric_to_3d_pos(num_pos, shape, order='C') for num_pos in all_block_num_indexes]
 
-    mini = [min(s, e) for s, e in zip(start, end)]
-    maxi = [max(s, e) for s, e in zip(start, end)]
+    """# add the sizes to the last block
+    last_one = all_block_3d_indexes[-1]
+    all_block_3d_indexes[-1] = tuple([last_one[0] + 1, last_one[1] + 1, last_one[2] + 1])"""
+
+    """print("start", start)
+    print("end", end)
+    print("all_block_3d_indexes")
+    for e in all_block_3d_indexes:
+        print(e)"""
+
+    mini = [None, None, None]
+    maxi = [None, None, None]
+    for _3d_index in all_block_3d_indexes:
+        for i in range(3):
+            if (mini[i] == None) or (_3d_index[i] < mini[i]):
+                mini[i] = _3d_index[i]
+            if maxi[i] == None or (_3d_index[i] + 1 > maxi[i]):
+                maxi[i] = _3d_index[i] + 1
+
+    """print("mini", mini)
+    print("maxi", maxi)"""
 
     mini = [e * d for e, d in zip(mini, original_array_chunk)]
     maxi = [e * d for e, d in zip(maxi, original_array_chunk)]
@@ -136,13 +166,12 @@ def create_buffer_node(dask_graph, proxy_array_name, load, array_to_original, or
     key = (merged_array_proxy_name, 0, 0, 0)
     
     # get new value
-    # array_proxy_dict = dask_graph[proxy_array_name]
     original_array_name = array_to_original[proxy_array_name]
     original_array_chunk = original_array_chunks[original_array_name]
     
     shape = original_array_blocks_shape[original_array_name]
     buffer_block_slices = get_buffer_slices_from_original_array(load, shape, original_array_chunk)
-    get_func = getitem # get_func = array_proxy_dict[list(array_proxy_dict.keys())[0]][0]
+    get_func = getitem 
     value = (get_func, original_array_name, buffer_block_slices)
 
     # add new key/val pair to the dask graph
@@ -294,7 +323,6 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     num_pos_in_proxy = _3d_to_numeric_pos(pos_in_proxy_array, img_nb_blocks_per_dim, order='C') 
     num_pos_in_buffer = num_pos_in_proxy - int(num_start_of_buffer)
     pos_in_buffer = numeric_to_3d_pos(num_pos_in_buffer, img_nb_blocks_per_dim, order='C')
-
     pos_in_buffer = [pos_in_buffer[i] * img_chunks_sizes[i] for i in range(3)]
 
     # add the slices to the starting position

@@ -163,7 +163,6 @@ def graph_verifier():
     key = "data"
     arr = get_dask_array_from_hdf5(data_path, key)
     dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=2)
-
     
     # first graph
     graph1 = dask_array.dask.dicts

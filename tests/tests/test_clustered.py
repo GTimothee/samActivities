@@ -22,7 +22,7 @@ def test_get_buffer_slices_from_original_array():
     d'où slices = (0, 10, None), (20, 40, None), (0, 30, None)
     """
 
-    expected_slices = (slice(0, 10, None), slice(20, 40, None), slice(0, 30, None))
+    expected_slices = (slice(0, 20, None), slice(0, 60, None), slice(0, 60, None))
     slices = get_buffer_slices_from_original_array(load, shape, original_array_chunk)
     if slices != expected_slices:
         print("error in", sys._getframe().f_code.co_name)
@@ -401,7 +401,7 @@ def test_create_buffers():
     => strategy: buffer=row_size max => 7 blocks contiguous max
     rows: 0-6 7-13 14-20 21-27
     """
-    expected = [[0,1,2,3,4,5], [12,13,14], [17], [20,21,22], [23]]
+    expected = [[0,1,2,3,4,5], [12,13], [14], [17], [20], [21,22,23]]
 
     buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=8)
     if buffers != expected:
@@ -409,6 +409,16 @@ def test_create_buffers():
         print("buffer'\n", buffers, "\n\n")
         print("expected\n", expected)
         return 
+
+    slices_list = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]
+    buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, nb_bytes_per_val=8)
+    expected = [[0,1,2,3,4,5,6], [7,8,9,10,11,12,13], [14,15,16,17,18,19,20], [21,22,23,24]]
+    if buffers != expected:
+        print("error in", sys._getframe().f_code.co_name)
+        print("buffer'\n", buffers, "\n\n")
+        print("expected\n", expected)
+        return 
+
     print("success")
 
 def test_is_in_load():

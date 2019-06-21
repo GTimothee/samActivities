@@ -66,3 +66,4 @@ def test_main_funcs():
 test_sum()
 #test_create_buffers()
 #test_main()
+#test_in_custom_dask()

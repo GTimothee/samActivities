@@ -27,28 +27,37 @@ def logical_chunks_tests(arr, case, number_of_arrays):
     else:
         raise ValueError("error")
 
-    """print("new chunks", arr.shape, arr.chunks)
-    print("new_chunks_shape", new_chunks_shape)"""
-
     all_arrays = list()
     for i in range(nb_chunks[0]):
         for j in range(nb_chunks[1]):
             for k in range(nb_chunks[2]):
+                upper_corner = (i * new_chunks_shape[0],
+                                j * new_chunks_shape[1],
+                                k * new_chunks_shape[2])
                 all_arrays.append(load_array_parts(arr=arr,
                                                    geometry="right_cuboid",
                                                    shape=new_chunks_shape,
-                                                   upper_corner=(i * new_chunks_shape[0],
-                                                                 j * new_chunks_shape[1],
-                                                                 k * new_chunks_shape[2]),
+                                                   upper_corner=upper_corner,
                                                    random=False))
 
-    # to del:
-    # print("nb arrays: ", len(all_arrays))
-    if number_of_arrays is not None:
+    """if number_of_arrays is not None:
       all_arrays = all_arrays[:number_of_arrays]
+
+    print("nb of array used", len(all_arrays))
+
     a5 = all_arrays.pop(0)
     for a in all_arrays:
-        a5 = a5 + a
+        a5 = a5 + a"""
+
+    a5 = all_arrays[0]
+    print("a5.shape", a5.shape)
+    print("a5.chunks", a5.chunks)
+
+    """for k, v in a5.dask.dicts.items():
+      if 'array' in k:
+        for k2, v2 in v.items():
+          print(k2)
+          print(v2, "\n")"""
     return a5
 
 def get_graph_for_tests(i):
