@@ -51,13 +51,6 @@ def get_slices_dicts_for_verifier(graph, original_array_chunk_shape):
 
         combined_slices = tuple([slice(s, e, step) for s, e, step in zip(slices_start, slices_end, slices_step)])
 
-        if combined_slices == tuple():
-            print("arr_slices", arr_slices)
-            print("slices", slices)
-            print("slices_end", slices_end)
-            print("buffer_start", buffer_start)
-            print("\n\n")
-
         return combined_slices
 
     def get_slices_dict_getitem(graph, getitem_key, proxy_array_part_to_orig_array_slices, buffer_part_to_orig_array_slices, original_array_chunk_shape):
@@ -157,7 +150,7 @@ def get_slices_dicts_for_verifier(graph, original_array_chunk_shape):
 
 
 #TODO: do not use until verification 
-def graph_verifier():
+def test_graph_verifier():
     # get data
     data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
     key = "data"
@@ -174,32 +167,36 @@ def graph_verifier():
     original_array_chunk_shape = (6, 1210, 1400)
     slices_dict_getitem2, slices_dict_rechunk2 = get_slices_dicts_for_verifier(graph2, original_array_chunk_shape)
 
-    print("evaluating getitems")
-    fails = 0
+    fails_g = 0
     getitem2_keys = list(slices_dict_getitem2.keys())
     for k, v in slices_dict_getitem1.items():
         if not k in getitem2_keys:
-            fails += 1
+            fails_g += 1
             print("not", k, "in getitem2_keys")
         else:
             if v != slices_dict_getitem2[k]:
-                fails += 1
+                fails_g += 1
                 print("\nfailed at", k)
                 print(v[1], "became \n", slices_dict_getitem2[k][1])
 
-    print("encountered", fails, "failures")
-
-    print("evaluating rechunks")
+    fails_r = 0
     rechunk2_keys = list(slices_dict_rechunk2.keys())
     for k, v in slices_dict_rechunk1.items():
         if not k in rechunk2_keys:
             print("not", k, "in rechunk2_keys")
+            fails_r += 1
         else:
             if v != slices_dict_rechunk2[k]:
+                fails_r += 1
                 print(v, "became ", slices_dict_rechunk2[k])
+    
+    if fails_g == 0 and fails_r == 0:
+        print("success")
+    if fails_g != 0:
+        print("encountered", fails_g, "failures in getitems")
+    if fails_r != 0:
+        print("encountered", fails_r, "failures in rechunks")
 
-    print("end")
-    return
 
 def test_main():
     """
@@ -208,24 +205,27 @@ def test_main():
     data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
     key = "data"
     
-    for i in range(4):
-        arr = get_dask_array_from_hdf5(data_path, key)
-        dask_array = logical_chunks_tests(arr, cases[i], number_of_arrays=2)
-        graph = dask_array.dask.dicts
-        graph = main(graph)
+    try:
+        for i in range(4):
+            arr = get_dask_array_from_hdf5(data_path, key)
+            dask_array = logical_chunks_tests(arr, cases[i], number_of_arrays=2)
+            graph = dask_array.dask.dicts
+            graph = main(graph)
+    except:
+        print("error in", sys._getframe().f_code.co_name)
+        return
 
     print("success")
-    return
 
 
 def test_sum():
     """
     see if it returns the good results
     """
-    number_of_arrays = 1
+    number_of_arrays = 2
     # custom dask
     import sys, os, time
-    sys.path.insert(0,'/home/user/Documents/workspace/projects/dask') 
+    sys.path.insert(0, '/home/user/Documents/workspace/projects/dask') 
     import dask
     from dask.array.io_optimization import optimize_func
     import numpy as np
@@ -236,7 +236,7 @@ def test_sum():
 
     # non opti
     arr = get_dask_array_from_hdf5(data_path, key)
-    dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=1)
+    dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=number_of_arrays)
     result_non_opti = dask_array.sum()
     print(result_non_opti.compute())
     #result_non_opti.visualize(filename='./test_non_opti.png', optimize_graph=True)
@@ -244,10 +244,15 @@ def test_sum():
     # opti
     dask.config.set({'optimizations': [optimize_func]})
     arr = get_dask_array_from_hdf5(data_path, key)
-    dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=1)
+    dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=number_of_arrays)
     result_opti = dask_array.sum()
     #result_opti.visualize(filename='./test_opti.png', optimize_graph=True)
-    print(result_opti.compute())
+
+    if np.array_equal(result_opti.compute(), result_non_opti.compute()):
+        print("success")
+    else:
+        print("error in", sys._getframe().f_code.co_name)
+    return
 
 
 def test_in_custom_dask():

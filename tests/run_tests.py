@@ -27,6 +27,7 @@ from test_main import *
 
 
 def test_get_slices():
+    print("testing get_slices")
     test_add_or_create_to_list_dict()
     test_get_keys_from_graph()
     test_get_rechunk_subkeys()
@@ -39,12 +40,14 @@ def test_get_slices():
 
 
 def test_get_dicts():
+    print("testing get_dicts")
     test_get_array_block_dims()
     test_get_original_array_from_proxy_array_name()
     test_get_arrays_dictionaries()
 
 
 def test_clustered():
+    print("testing clustered")
     test_convert_proxy_to_buffer_slices()
     test_add_getitem_task_in_graph()
     test_recursive_search_and_update()
@@ -54,16 +57,17 @@ def test_clustered():
     test_create_buffer_node()
     test_create_buffers()
     test_is_in_load()
+    test_get_buffer_slices_from_original_array()
 
 def test_main_funcs():
+    print("testing main funcs")
+    test_sum()
+    test_graph_verifier()
     test_convert_slices_list_to_numeric_slices()
     test_main()
     test_in_custom_dask()
-
-#test_get_buffer_slices_from_original_array()
-#test_convert_proxy_to_buffer_slices()
-#graph_verifier()
-#test_sum()
-#test_create_buffers()
-#test_main()
-test_in_custom_dask()
+    
+test_get_slices()
+test_get_dicts()
+test_clustered()
+test_main_funcs()

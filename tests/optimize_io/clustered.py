@@ -19,21 +19,12 @@ __all__ = ("apply_clustered_strategy", "create_buffers", "create_buffer_node",
 
 def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape):
     for proxy_array_name, slices_list in slices_dict.items(): 
-        """print(slices_list)"""
         buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape)
-        """print("buffers", buffers)"""
-        
+    
         for load_index in range(len(buffers)):
             load = buffers[load_index]
-            """ print("current load", load)"""
             # if len(load) > 1: TODO: remettre ça, l'enlever sert juste à voir (dans la viz) si le buffering marche 
             graph, buffer_node_name = create_buffer_node(graph, proxy_array_name, load, array_to_original, original_array_blocks_shape, original_array_chunks)
-            
-            """print("buffer_node_name", buffer_node_name)
-            print("graph[buffer_node_name]", graph[buffer_node_name])"""
-
-            #sys.exit()
-
             graph = update_io_tasks(graph, load, deps_dict, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape, buffer_node_name)
     return graph
 
@@ -322,8 +313,8 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     # convert 3d pos in image to 3d pos in buffer (merged block)
     num_pos_in_proxy = _3d_to_numeric_pos(pos_in_proxy_array, img_nb_blocks_per_dim, order='C') 
     num_pos_in_buffer = num_pos_in_proxy - int(num_start_of_buffer)
-    pos_in_buffer = numeric_to_3d_pos(num_pos_in_buffer, img_nb_blocks_per_dim, order='C')
-    pos_in_buffer = [pos_in_buffer[i] * img_chunks_sizes[i] for i in range(3)]
+    index_in_buffer = numeric_to_3d_pos(num_pos_in_buffer, img_nb_blocks_per_dim, order='C')
+    pos_in_buffer = [index_in_buffer[i] * img_chunks_sizes[i] for i in range(3)]
 
     # add the slices to the starting position
     slices_start = [s.start for s in slices]
@@ -339,7 +330,7 @@ def convert_proxy_to_buffer_slices(proxy_key, buffer_proxy_name, slices, array_t
     # don't modify the step
     combined_slices = tuple([slice(s, e, step) for s, e, step in zip(slices_start, slices_stop, slices_step)])
 
-    return pos_in_buffer, combined_slices
+    return index_in_buffer, combined_slices
 
 
 

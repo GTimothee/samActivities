@@ -16,9 +16,7 @@ def get_slices_from_dask_graph(graph):
         
     if 'getitem' in list(keys_dict.keys()):
         getitem_keys = keys_dict['getitem']
-
         s2, d2 = get_slices_from_getitem_keys(graph, getitem_keys)
-        
         slices_dict.update(s2)
         deps_dict.update(d2)
 
