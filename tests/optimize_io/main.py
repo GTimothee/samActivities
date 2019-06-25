@@ -23,7 +23,8 @@ def main(graph):
         original_array_blocks_shape :       original-array-name -> nb blocks in each dim
         deps_dict :                         proxy-array -> proxy-array-dependent tasks list
     """
-    slices_dict, deps_dict = get_slices_from_dask_graph(graph)
+    used_getitems = get_used_getitems_from_graph(graph)
+    slices_dict, deps_dict = get_slices_from_dask_graph(graph, used_getitems)
     array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape = get_arrays_dictionaries(graph, slices_dict)
     slices_dict = convert_slices_list_to_numeric_slices(slices_dict, array_to_original, original_array_blocks_shape)
     graph = apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, original_array_chunks, original_array_shapes, original_array_blocks_shape)

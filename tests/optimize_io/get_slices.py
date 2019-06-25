@@ -1,22 +1,22 @@
 __all__ = ("get_slices_from_dask_graph", "get_slices_from_rechunk_keys", "get_slices_from_getitem_keys", "get_slices_from_rechunk_subkeys", 
 "get_slices_from_getitem_subkeys", "get_slices_from_getitem_subkeys", "test_source_key", "get_rechunk_subkeys", "get_keys_from_graph",
-"add_or_create_to_list_dict")
+"add_or_create_to_list_dict", "get_used_getitems_from_graph")
 
 # TODO generalize it to a graph/tree search
-def get_slices_from_dask_graph(graph):
+def get_slices_from_dask_graph(graph, used_getitems):
     keys_dict = get_keys_from_graph(graph)
     slices_dict = dict()
     deps_dict = dict()
 
     if 'rechunk-merge' in list(keys_dict.keys()):
         rechunk_keys = keys_dict['rechunk-merge']
-        s1, d1 = get_slices_from_rechunk_keys(graph, rechunk_keys)
+        s1, d1 = get_slices_from_rechunk_keys(graph, rechunk_keys) # register the getitem used
         slices_dict.update(s1)
         deps_dict.update(d1)
         
     if 'getitem' in list(keys_dict.keys()):
         getitem_keys = keys_dict['getitem']
-        s2, d2 = get_slices_from_getitem_keys(graph, getitem_keys)
+        s2, d2 = get_slices_from_getitem_keys(graph, getitem_keys, used_getitems) # add a condition to just take those that are used in the graph
         slices_dict.update(s2)
         deps_dict.update(d2)
 
@@ -38,19 +38,21 @@ def get_slices_from_rechunk_keys(graph, rechunk_keys):
     return global_slices_dict, global_deps_dict
 
 
-def get_slices_from_getitem_keys(graph, getitem_keys):
+def get_slices_from_getitem_keys(graph, getitem_keys, used_getitems):
     global_slices_dict = dict()
     global_deps_dict = dict()
     for getitem_key in getitem_keys:
         getitem_graph = graph[getitem_key]
-        local_slices_dict, local_deps_dict = get_slices_from_getitem_subkeys(getitem_graph)
+        local_slices_dict, local_deps_dict = get_slices_from_getitem_subkeys(getitem_graph, used_getitems)
         
+        # slices
         for k, v in local_slices_dict.items():
             if not k in list(global_slices_dict.keys()):
                 global_slices_dict.update(local_slices_dict)
             else:
                 global_slices_dict[k] = global_slices_dict[k] + local_slices_dict[k]
 
+        # dependencies
         for k, v in local_deps_dict.items():
             if not k in list(global_deps_dict.keys()):
                 global_deps_dict.update(local_deps_dict)
@@ -116,14 +118,14 @@ def get_slices_from_rechunk_subkeys(rechunk_merge_graph, split_keys, merge_keys)
     return slices_dict, deps_dict
 
 
-def get_slices_from_getitem_subkeys(getitem_graph):
+def get_slices_from_getitem_subkeys(getitem_graph, used_getitems):
     slices_dict = dict()
     deps_dict = dict()
 
     for k, v in getitem_graph.items():
         
         f, source_key, s = v 
-        if isinstance(k[0], str) and "getitem" in k[0]:
+        if isinstance(k[0], str) and "getitem" in k[0] and k in used_getitems:
             slices_dict, deps_dict = test_source_key(slices_dict, deps_dict, source_key, k)
     return slices_dict, deps_dict
 
@@ -152,6 +154,45 @@ def test_source_key(slices_dict, deps_dict, source_key, dependent_key):
 def get_rechunk_subkeys(rechunk_graph):
     keys_dict = get_keys_from_graph(rechunk_graph, printer=False)
     return keys_dict['rechunk-split'], keys_dict['rechunk-merge']
+
+
+def get_used_getitems_from_graph(graph):
+    """ search in the graph the use of getitem tasks so that we just take them into account to create the buffers of clustered strategy
+    """
+    def recursive_search(_list, used_getitems):
+        if not isinstance(_list[0], tuple): # if it is not a list of targets
+            for i in range(len(_list)):
+                sublist = _list[i] 
+                used_getitems = recursive_search(sublist, used_getitems)
+        else:
+            for i in range(len(_list)):
+                target_key = _list[i] 
+                if isinstance(target_key, tuple) and 'getitem' in target_key[0]:
+                    used_getitems.append(target_key)
+        return used_getitems
+
+    used_getitems = list()
+    for k, v in graph.items():
+        if isinstance(k, tuple):
+            k2 = k[0]
+        elif isinstance(k, str):
+            k2 = k 
+        else:
+            raise ValueError("type of key unsupported", k, type(k))
+
+        split = k2.split('-')
+        key_name = "-".join(split[:-1]) # take all but the ID
+        if not key_name == "getitem":
+            for subkey,  subval in v.items():
+                if isinstance(subval, tuple):
+                    args = subval[1:]
+                    for arg in args:
+                        if isinstance(arg, tuple) and isinstance(arg[0], str) and 'getitem' in arg[0]:
+                            used_getitems.append(arg)   
+                        elif isinstance(arg, list):
+                            used_getitems = recursive_search(arg, used_getitems)
+    print("used_getitems", used_getitems)
+    return used_getitems
 
 
 # get keys

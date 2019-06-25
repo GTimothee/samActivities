@@ -67,7 +67,10 @@ def test_main_funcs():
     test_main()
     test_in_custom_dask()
     
-test_get_slices()
-test_get_dicts()
-test_clustered()
-test_main_funcs()
+def test_all():
+    test_get_slices()
+    test_get_dicts()
+    test_clustered()
+    test_main_funcs()
+
+test_get_used_getitems_from_graph()
