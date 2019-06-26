@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "681bee48b4c4211c9ef779af69e9b1706eadd024a4d779a4d58d0f1f8a73b207"
+            "sha256": "1fe7dc876319ae5b94338221ab94a64169b9bec31b2f4eb7a21711350fecb2f1"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -18,11 +18,18 @@
     "default": {
         "dask": {
             "hashes": [
-                "sha256:5e7876bae2a01b355d1969b73aeafa23310febd8c353163910b73e93dc7e492c",
-                "sha256:942edbbaceb914be3427fc6f1d5da98a31c3e9eceddcf3158a74e1d4d6fcc67c"
+                "sha256:3917756ed467ba984a1aa6aa70f213de9014c63945671876698a1621de7f2ac2",
+                "sha256:64d59fa0dc5119fab0ea0deb7106ef01747ae9d10eb8fc3ef9477e7bca1062c8"
             ],
             "index": "pypi",
-            "version": "==1.2.2"
+            "version": "==2.0.0"
+        },
+        "dill": {
+            "hashes": [
+                "sha256:f6d6046f9f9195206063dd0415dff185ad593d6ee8b0e67f12597c0f4df4986f"
+            ],
+            "index": "pypi",
+            "version": "==0.2.9"
         },
         "graphviz": {
             "hashes": [

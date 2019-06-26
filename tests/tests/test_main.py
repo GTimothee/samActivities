@@ -238,7 +238,6 @@ def test_sum():
     arr = get_dask_array_from_hdf5(data_path, key)
     dask_array = logical_chunks_tests(arr, cases[0], number_of_arrays=number_of_arrays)
     result_non_opti = dask_array.sum()
-    print(result_non_opti.compute())
     #result_non_opti.visualize(filename='./test_non_opti.png', optimize_graph=True)
 
     # opti
@@ -287,9 +286,32 @@ def test_in_custom_dask():
             print("time to process:", t)
         return results
 
-    number_of_arrays = 2
-    viz = False
-    non_opti = True
+    def test_it(number_of_arrays, viz, non_opti):
+        # without opti
+        dask.config.set({'optimizations': []})
+        if non_opti:
+            if not viz:
+                results = do_a_run("without optimization", number_of_arrays, viz=viz)
+            else:
+                do_a_run("without optimization", number_of_arrays, viz=viz, prefix='./output_imgs/', suffix='non-opti.png')
+
+        # with opti
+        dask.config.set({'optimizations': [optimize_func]})
+        one_gig = 100000000
+        dask.config.set({'io-optimizer': {'memory_available':one_gig}})
+        if not viz:
+            results_opti = do_a_run("with optimization", number_of_arrays, viz=viz)
+            if non_opti:
+                for i in range(len(results)):
+                    if not np.array_equal(results[i], results_opti[i]):
+                        print("error in", sys._getframe().f_code.co_name)
+                        # print(results[i], "\n\n", results_opti[i])
+                    else:
+                        print("success")
+
+        else:
+            do_a_run("with optimization", number_of_arrays, viz=viz, prefix='./output_imgs/', suffix='opti.png')
+            print("success")
 
     # custom dask
     import sys, os, time
@@ -298,30 +320,15 @@ def test_in_custom_dask():
     from dask.array.io_optimization import optimize_func
     import numpy as np
 
-    # without opti
-    if non_opti:
-        if not viz:
-            results = do_a_run("without optimization", number_of_arrays, viz=viz)
-        else:
-            do_a_run("without optimization", number_of_arrays, viz=viz, prefix='./output_imgs/', suffix='non-opti.png')
+    number_of_arrays = 2
+    viz = False
+    non_opti = True
+    test_it(number_of_arrays, viz, non_opti)
 
-    # with opti
-    dask.config.set({'optimizations': [optimize_func]})
-    one_gig = 100000000
-    dask.config.set({'io-optimizer': {'memory_available':one_gig}})
-    if not viz:
-        results_opti = do_a_run("with optimization", number_of_arrays, viz=viz)
+    viz = True
+    non_opti = True
+    test_it(number_of_arrays, viz, non_opti)
 
-        if non_opti:
-            for i in range(len(results)):
-                if not np.array_equal(results[i], results_opti[i]):
-                    print("error in", sys._getframe().f_code.co_name)
-                    # print(results[i], "\n\n", results_opti[i])
-                else:
-                    print("success")
-
-    else:
-        do_a_run("with optimization", number_of_arrays, viz=viz, prefix='./output_imgs/', suffix='opti.png')
-        print("success")
+    
     
     

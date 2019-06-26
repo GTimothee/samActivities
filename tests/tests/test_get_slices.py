@@ -9,27 +9,62 @@ import sys
 # TODO: verify deps_dict for all tests
 
 
-def test_get_used_getitems_from_graph():
+def test_BFS_connected_components():
+    graph = {
+        "a":["b", "c"],
+        "b":["a", "d"],
+        "c":["a"],
+        "d":["b"],
+        "e":["f", "g"],
+        "f":["e"],
+        "g":["e"]
+    }
+
+    expected_comps = {
+        0: ["a", "b", "c", "d"],
+        1: ["e", "f", "g"]
+    }
+
+    comps = BFS_connected_components(graph)
+
+    for k, v in expected_comps.items():
+        if k not in comps:
+            print("error in", sys._getframe().f_code.co_name)
+            print("key missing")
+            return
+        if set(comps[k]) != set(v):
+            print("error in", sys._getframe().f_code.co_name)
+            print("bad component")
+            return 
+    
+    print("success")
+            
+
+def test_get_used_getitems_from_graph2():
+    print("not implemented")
+
+
+def test_get_getitems_from_graph():
+    """ failed, 
+    """
     data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
     key = "data"
     arr = get_dask_array_from_hdf5(data_path, key)
     case = 'slabs_dask_interpol'
     dask_array = logical_chunks_tests(arr, case, number_of_arrays=1)
     graph = dask_array.dask.dicts
-    used_getitems = get_used_getitems_from_graph(graph)
 
+    expected_length = 245
+    used_getitems = get_getitems_from_graph(graph)
     used_getitems = list(set(used_getitems))
 
-    if len(used_getitems) != 35:
+    if len(used_getitems) != expected_length:
         print("error in", sys._getframe().f_code.co_name)
-        print("len(used_getitems)", len(used_getitems))
+        print("expected", expected_length, "\ngot", len(used_getitems))
         return
 
-    """if used_getitems != expected_used_getitem:
-        print("error in", sys._getframe().f_code.co_name)
-        print("expected", expected_used_getitem, "\ngot", used_getitems)
-        return """
     print("success")
+  
 
 def test_add_or_create_to_list_dict():
     d = {'a': [1], 'c': [5, 6]}

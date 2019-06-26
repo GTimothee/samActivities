@@ -11,6 +11,7 @@ numpy = "*"
 toolz = "*"
 h5py = "*"
 graphviz = "*"
+dill = "*"
 
 [requires]
 python_version = "3.7"

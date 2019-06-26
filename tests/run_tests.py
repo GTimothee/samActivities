@@ -37,6 +37,8 @@ def test_get_slices():
     test_get_slices_from_getitem_subkeys()
     test_get_slices_from_getitem_keys()
     test_get_slices_from_dask_graph()
+    test_get_used_getitems_from_graph()
+    test_BFS_connected_components()
 
 
 def test_get_dicts():
@@ -73,4 +75,4 @@ def test_all():
     test_clustered()
     test_main_funcs()
 
-test_get_used_getitems_from_graph()
+
