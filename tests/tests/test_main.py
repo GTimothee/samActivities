@@ -283,7 +283,7 @@ def test_in_custom_dask():
                 dask_array.visualize(filename=filename, optimize_graph=True)
             t = time.time() - t
             
-            print("time to process:", t)
+            print("total processing time:", t)
         return results
 
     def test_it(number_of_arrays, viz, non_opti):
@@ -321,10 +321,13 @@ def test_in_custom_dask():
     import numpy as np
 
     number_of_arrays = 2
+
+    print("\n testing the computation results")
     viz = False
     non_opti = True
     test_it(number_of_arrays, viz, non_opti)
 
+    print("\n creating visuals")
     viz = True
     non_opti = True
     test_it(number_of_arrays, viz, non_opti)

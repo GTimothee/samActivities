@@ -1,6 +1,6 @@
 __all__ = ("get_slices_from_dask_graph", "get_slices_from_rechunk_keys", "get_slices_from_getitem_keys", "get_slices_from_rechunk_subkeys", 
 "get_slices_from_getitem_subkeys", "get_slices_from_getitem_subkeys", "test_source_key", "get_rechunk_subkeys", "get_keys_from_graph",
-"add_or_create_to_list_dict", "get_getitems_from_graph", "get_used_getitems_from_graph2", "BFS_connected_components")
+"add_or_create_to_list_dict", "get_getitems_from_graph", "get_used_getitems_from_graph", "BFS_connected_components")
 
 # TODO generalize it to a graph/tree search
 def get_slices_from_dask_graph(graph, used_getitems):
@@ -156,7 +156,12 @@ def get_rechunk_subkeys(rechunk_graph):
     return keys_dict['rechunk-split'], keys_dict['rechunk-merge']
 
 
-def BFS_connected_components(graph):
+
+def true_dumb_function(x):
+    return True
+
+
+def BFS_connected_components(graph, filter_condition_for_root_nodes=true_dumb_function, max_iterations=10):
     """
     thought to work with undirected graphs for the moment
     returns a dictionary with key = component id (increasing int) and value is a list of the nodes in the component
@@ -166,11 +171,11 @@ def BFS_connected_components(graph):
             return True
         return False
 
-    def visit_node(visited, n, nb_nodes_visited, components, nodequeue):
+    def visit_node(visited, n, nb_nodes_visited, components, node_queue):
         visited[n] = True
         nb_nodes_visited += 1
         add_or_create_to_list_dict(components, component_id, n, check_unique=True)
-        nodequeue.append(n)
+        node_queue.append(n)
         return nb_nodes_visited
 
     # initialize visitation dict
@@ -179,31 +184,39 @@ def BFS_connected_components(graph):
     visited = dict(zip(nodes, nb_nodes_total * [False]))
     nb_nodes_visited = 0
 
-    # initilize component variables
+    # initialize component variables
     components = dict()
     component_id = 0
 
+    max_iterations = 10
+    nb_its = 0
     while all_nodes_not_visited(nb_nodes_visited, nb_nodes_total):
 
         # get next unvisited node
-        nodequeue = list()
+        node_queue = list()
         for n in nodes:
             if not visited[n]:
-                nb_nodes_visited = visit_node(visited, n, nb_nodes_visited, components, nodequeue)
+                if filter_condition_for_root_nodes(n):
+                    nb_nodes_visited = visit_node(visited, n, nb_nodes_visited, components, node_queue)
                 break     
                  
         # run BFS
-        while len(nodequeue) > 0:
-            curr_node = nodequeue.pop(0)
+        while len(node_queue) > 0:
+            curr_node = node_queue.pop(0)
             for n in graph[curr_node]:
                 if not visited[n]:
-                    nb_nodes_visited = visit_node(visited, n, nb_nodes_visited, components, nodequeue)
+                    nb_nodes_visited = visit_node(visited, n, nb_nodes_visited, components, node_queue)
         component_id += 1 
+
+        # print("it", nb_its)
+        nb_its += 1
+        if max_iterations == nb_its:
+            break
 
     return components
 
 
-def get_used_getitems_from_graph2(graph):
+def get_used_getitems_from_graph(graph, undirected):
     """ search in the graph the use of getitem tasks so that we just take them into account to create the buffers of clustered strategy
     """
     def recursive_search(_list, neighbours_list):
@@ -233,6 +246,8 @@ def get_used_getitems_from_graph2(graph):
                     add_or_create_to_list_dict(remade_graph, k2, v2, check_unique=True)
                     if undirected:
                         add_or_create_to_list_dict(remade_graph, v2, k2, check_unique=True)
+                    else:
+                        add_or_create_to_list_dict(remade_graph, v2, None, check_unique=True)
                 elif isinstance(v2, tuple):
                     if len(v2) > 1:
                         for arg in v2[1:]:
@@ -242,34 +257,51 @@ def get_used_getitems_from_graph2(graph):
                                     add_or_create_to_list_dict(remade_graph, k2, n, check_unique=True)
                                     if undirected:
                                         add_or_create_to_list_dict(remade_graph, n, k2, check_unique=True)
+                                    else:
+                                        add_or_create_to_list_dict(remade_graph, n, None, check_unique=True)
                                         
                             elif isinstance(arg, tuple) and isinstance(arg[0], str):
                                 add_or_create_to_list_dict(remade_graph, k2, arg, check_unique=True)
                                 if undirected:
                                     add_or_create_to_list_dict(remade_graph, arg, k2, check_unique=True)
+                                else:
+                                    add_or_create_to_list_dict(remade_graph, arg, None, check_unique=True)
                                     
         """for k, v in remade_graph.items():
-        print("\n\n", k)
-        print("\n", v)"""
+            print("\n\n", k)
+            print("\n", v)"""
 
         return remade_graph
         
-    remade_graph = get_remade_graph(graph, undirected=True)
-    connected_comps = BFS_connected_components(remade_graph)
+    def func(n):
+        if isinstance(n, tuple) and 'getitem' in n[0]:
+            return True
+        return False
+
+    remade_graph = get_remade_graph(graph, undirected=undirected)
+    connected_comps = BFS_connected_components(remade_graph, filter_condition_for_root_nodes=func)
+
     max_len = max(map(len, connected_comps.values()))
+
     main_components = [_list for comp, _list in connected_comps.items() if len(_list) == max_len]
-    
+
+    """import sys
+    for c in main_components:
+        print("\n\n", c)
+    sys.exit()"""
+
     used_getitems = list()
     for main_comp in main_components:
-        for k in list(main_comp.keys()):
-            if isinstance(k, tuple) and 'getitem' in k[0] and k not in used_getitems:
-                used_getitems.append(k)
+        for e in main_comp:
+            if isinstance(e, tuple) and 'getitem' in e[0] and e not in used_getitems:
+                used_getitems.append(e)
 
     return used_getitems
 
 
 def get_getitems_from_graph(graph):
-    """ search in the graph the use of getitem tasks so that we just take them into account to create the buffers of clustered strategy
+    """ not useful, use it if get_used_getitems_from_graph does not work just to verify that the results are corrects
+    search in the graph the use of getitem tasks so that we just take them into account to create the buffers of clustered strategy
     """
     def recursive_search(_list, used_getitems):
         if not isinstance(_list[0], tuple): # if it is not a list of targets
@@ -324,10 +356,12 @@ def get_keys_from_graph(graph, printer=False):
 
 # utility
 def add_or_create_to_list_dict(d, k, v, check_unique=False):
-   
     if k not in d:
-        d[k] = [v]
+        if v:
+            d[k] = [v]
+        else:
+            d[k] = []
     else:
-        if (check_unique and v not in d[k]) or not check_unique:
+        if v and (check_unique and v not in d[k]) or not check_unique:
             d[k].append(v)
     return d

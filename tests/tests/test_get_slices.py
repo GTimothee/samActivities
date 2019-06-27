@@ -40,12 +40,28 @@ def test_BFS_connected_components():
     print("success")
             
 
-def test_get_used_getitems_from_graph2():
-    print("not implemented")
+def test_get_used_getitems_from_graph():
+    data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
+    key = "data"
+    arr = get_dask_array_from_hdf5(data_path, key)
+    case = 'slabs_dask_interpol'
+    dask_array = logical_chunks_tests(arr, case, number_of_arrays=1)
+    graph = dask_array.dask.dicts
+
+    expected_length = 36
+    used_getitems = get_used_getitems_from_graph(graph, undirected=False)
+    used_getitems = list(set(used_getitems))
+
+    if len(used_getitems) != expected_length:
+        print("error in", sys._getframe().f_code.co_name)
+        print("expected", expected_length, "\ngot", len(used_getitems))
+        return
+
+    print("success")
 
 
 def test_get_getitems_from_graph():
-    """ failed, 
+    """ 
     """
     data_path = '/home/user/Documents/workspace/projects/samActivities/experience3/tests/data/bbsamplesize.hdf5'
     key = "data"
