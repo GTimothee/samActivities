@@ -75,4 +75,4 @@ def test_all():
     test_clustered()
     test_main_funcs()
 
-test_all()
+test_in_custom_dask(visuals=False, non_opti=False)

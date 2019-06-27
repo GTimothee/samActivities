@@ -254,7 +254,7 @@ def test_sum():
     return
 
 
-def test_in_custom_dask():
+def test_in_custom_dask(computation=True, visuals=True, non_opti=True):
 
     def do_a_run(message, number_of_arrays, viz=False, prefix=None, suffix=None):
         print(message)
@@ -322,15 +322,19 @@ def test_in_custom_dask():
 
     number_of_arrays = 2
 
-    print("\n testing the computation results")
-    viz = False
-    non_opti = True
-    test_it(number_of_arrays, viz, non_opti)
+    from multiprocessing.pool import ThreadPool
+    import dask
+    dask.config.set(pool=ThreadPool(1))
 
-    print("\n creating visuals")
-    viz = True
-    non_opti = True
-    test_it(number_of_arrays, viz, non_opti)
+    if computation:
+        print("\n testing the computation results")
+        viz = False
+        test_it(number_of_arrays, viz, non_opti)
+
+    if visuals:
+        print("\n creating visuals")
+        viz = True
+        test_it(number_of_arrays, viz, non_opti)
 
     
     

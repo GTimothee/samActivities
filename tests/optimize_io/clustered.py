@@ -21,6 +21,8 @@ def apply_clustered_strategy(graph, slices_dict, deps_dict, array_to_original, o
     for proxy_array_name, slices_list in slices_dict.items(): 
         buffers = create_buffers(slices_list, proxy_array_name, array_to_original, original_array_chunks, original_array_blocks_shape)
     
+        print("buffers", buffers)
+
         for load_index in range(len(buffers)):
             load = buffers[load_index]
             # if len(load) > 1: TODO: remettre ça, l'enlever sert juste à voir (dans la viz) si le buffering marche 

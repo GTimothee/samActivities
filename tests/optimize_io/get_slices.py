@@ -198,7 +198,7 @@ def BFS_connected_components(graph, filter_condition_for_root_nodes=true_dumb_fu
             if not visited[n]:
                 if filter_condition_for_root_nodes(n):
                     nb_nodes_visited = visit_node(visited, n, nb_nodes_visited, components, node_queue)
-                break     
+                    break     
                  
         # run BFS
         while len(node_queue) > 0:
@@ -280,9 +280,7 @@ def get_used_getitems_from_graph(graph, undirected):
 
     remade_graph = get_remade_graph(graph, undirected=undirected)
     connected_comps = BFS_connected_components(remade_graph, filter_condition_for_root_nodes=func)
-
     max_len = max(map(len, connected_comps.values()))
-
     main_components = [_list for comp, _list in connected_comps.items() if len(_list) == max_len]
 
     """import sys
